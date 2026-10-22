@@ -1,0 +1,7 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Claude Code local settings
+.claude/
