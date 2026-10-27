@@ -140,8 +140,13 @@ print(y)                                  # [[11,22,33],[14,25,36]],纵向量也
 nn.Linear(in_features, out_features, bias=True)
 ```
 
-$$W * X + b$$
-$$W:[D_{out}, D_{in}]   b = [D_{out}]$$
+```math
+W * X + b
+```
+
+```math
+W:[D_{out}, D_{in}]   b = [D_{out}]
+```
 bias表示是否增加偏置
 
 nn.ReLU()：负数变成零\
@@ -273,7 +278,9 @@ softmax得到概率:$p_i = \frac{e^z_i}{\sum_j e^{z_j}}$\
 记正确类为y,Cross-Entropy Loss为$L = -\log{p_y}$\
 对应softmax得到的概率为$L = -\log(\frac{e^{z_y}}{\sum_j e^{z_j}}) = z_y - \log{\sum_j e^{z_j}}$\
 对比NLLLoss,取正确类的位置并加负号 : $L = -\text{log\_softmax}(z)_y$
-$$\text{CrossEntropyLoss(z,y) = \text{NLLLoss(\text{log\_softmax(z)},y)}}$$
+```math
+\text{CrossEntropyLoss(z,y) = \text{NLLLoss(\text{log\_softmax(z)},y)}}
+```
 其实在Cross-Entropy内部已经实现了log_softmax，所以直接接收logits即可
 
 ## AdamW
@@ -331,12 +338,24 @@ print("eval:", eval_output)      # eval: tensor([1., 1., 1., 1., 1., 1., 1., 1.,
 对不同feature，其数值差距可能非常大，BatchNorm让其先进行标准的归一化\
 对一个N维的feature,记作$x$
 BatchNorm的过程:
-$$\mu_B = \frac{1}{N}\sum_{i=1}^N x_i$$
-$$\sigma_B^2 = \frac{1}{N}\sum_{i=1}^{N}(x_1-\mu_B)^2$$
+```math
+\mu_B = \frac{1}{N}\sum_{i=1}^N x_i
+```
+
+```math
+\sigma_B^2 = \frac{1}{N}\sum_{i=1}^{N}(x_1-\mu_B)^2
+```
 标准化，为了防止除以0，引入$\epsilon$
-$$\hat{x}_i=\frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}}$$
+
+```math
+\hat{x}_i=\frac{x_i-\mu_B}{\sqrt{\sigma_B^2+\epsilon}}
+```
+
 通过$\gamma$和$\beta$训练以恢复这一维的缩放关系:
-$$y_i = \gamma \hat{x_i} + \beta$$
+
+```math
+y_i = \gamma \hat{x_i} + \beta
+```
 训练时：\
 BatchNorm使用当前batch的均值和方差，在forward时自动更新running_mean(训练期间累计的均值)和running_var(训练期间累计的方差)\
 评估时：\
@@ -416,11 +435,22 @@ print(x)
 从加速的角度看,cpu和cuda之间的数据搬运需要经过PCIe/NVLink进入gpu显存\
 因此推理系统通常尽量让"模型权重/当前激活/KV Cache/sampling所需数据"长期驻留在GPU\
 这里大致解释一下KV Cache是什么：
-$$\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V$$
+```math
+\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
+```
 模型准备生成下一个token时，需要让当前token的Q与前面所有token的K匹配,把每个token的V向量乘对应的注意力权重，全部相加得到新的上下文向量\
 假设历史token为$K_1, K_2, K_3$\
-计算Q与K的相似度打分$$s_i = \frac{Q \cdot K_i}{\sqrt{d}}$$
-经过softmax得到概率(注意力权重)$$\alpha_i = \frac{e^{s_i}}{\sum_j e^{s_j}}$$
+计算Q与K的相似度打分
+
+```math
+s_i = \frac{Q \cdot K_i}{\sqrt{d}}
+```
+
+经过softmax得到概率(注意力权重)
+
+```math
+\alpha_i = \frac{e^{s_i}}{\sum_j e^{s_j}}
+```
 将得到的注意力权重分别乘对应的V并求和(称为聚合)\
 第一次处理提示词称为prefill:输入prompt → 并行计算prompt中的所有token → 建立KV Cache
 之后开始进入decode:输入新token → 计算新token的Q、K、V → 追加新的KV到Cache内 → 新Q查询历史KV → 生成下一个token\
@@ -433,7 +463,9 @@ sampling所需数据指的是Transformer最后一层会输出logits，一般只�
 `dtype = float32/float16/bfloat16`指定数据精度
 
 对FP16、FP32、BF16这三种类型都是浮点数:
-$$\text{符号位} \times \text{尾数/有效数字} \times \text{指数} = (-1)^{\text{sign}}\times \text{significand}\times2^{\text{exponent}}$$
+```math
+\text{符号位} \times \text{尾数/有效数字} \times \text{指数} = (-1)^{\text{sign}}\times \text{significand}\times2^{\text{exponent}}
+```
 
 | dtype | 总位数 | 指数位 | 尾数位 | 每元素字节 | 最大有限值 | 1附近的最小间隔(精度) |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -448,7 +480,9 @@ FP16 尾数比 BF16 多，因此在可表示范围内精度更细；BF16 与 FP3
 #### 显存计算:
 
 以INT4为例，下面的$1024^2$为线性层权重矩阵的shape(`W.shape = [1024, 1024]`)
-$$1024^2\times0.5\text{ bytes}=0.5\text{ MiB}$$
+```math
+1024^2\times0.5\text{ bytes}=0.5\text{ MiB}
+```
 
 #### "整数量化"
 
@@ -500,7 +534,9 @@ PTQ 有时需要校准数据，尤其是激活量化；某些纯权重量化只�
 训练前向过程中加入 fake quantization：浮点权重 → 模拟量化为整数 → 模拟反量化为浮点数 → 使用近似权重完成前向传播(在训练过程中就模拟量化误差，让模型主动适应低精度)
 
 例如：
-$$W \rightarrow q= \operatorname{round}(W/s) \rightarrow \hat W=sq$$
+```math
+W \rightarrow q= \operatorname{round}(W/s) \rightarrow \hat W=sq
+```
 
 前向传播使用 $\hat W$，而模型实际保存和更新的通常仍然是浮点参数
 
