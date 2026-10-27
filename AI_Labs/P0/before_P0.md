@@ -277,9 +277,9 @@ print("y.grad:", y.grad)
 softmax得到概率:$`p_i = \frac{e^z_i}{\sum_j e^{z_j}}`$\
 记正确类为y,Cross-Entropy Loss为$`L = -\log{p_y}`$\
 对应softmax得到的概率为$`L = -\log(\frac{e^{z_y}}{\sum_j e^{z_j}}) = z_y - \log{\sum_j e^{z_j}}`$\
-对比NLLLoss,取正确类的位置并加负号 : $`L = -\operatorname{log\_softmax}(z)_y`$
+对比NLLLoss,取正确类的位置并加负号 : $`L = -\mathrm{log\_softmax}(z)_y`$
 ```math
-\operatorname{CrossEntropyLoss}(z,y) = \operatorname{NLLLoss}(\operatorname{log\_softmax}(z),y)
+\mathrm{CrossEntropyLoss}(z,y) = \mathrm{NLLLoss}(\mathrm{log\_softmax}(z),y)
 ```
 其实在Cross-Entropy内部已经实现了log_softmax，所以直接接收logits即可
 
@@ -436,7 +436,7 @@ print(x)
 因此推理系统通常尽量让"模型权重/当前激活/KV Cache/sampling所需数据"长期驻留在GPU\
 这里大致解释一下KV Cache是什么：
 ```math
-\operatorname{Attention}(Q,K,V)=\operatorname{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
+\mathrm{Attention}(Q,K,V)=\mathrm{softmax}\left(\frac{QK^T}{\sqrt{d}}\right)V
 ```
 模型准备生成下一个token时，需要让当前token的Q与前面所有token的K匹配,把每个token的V向量乘对应的注意力权重，全部相加得到新的上下文向量\
 假设历史token为$`K_1, K_2, K_3`$\
@@ -535,7 +535,7 @@ PTQ 有时需要校准数据，尤其是激活量化；某些纯权重量化只�
 
 例如：
 ```math
-W \rightarrow q= \operatorname{round}(W/s) \rightarrow \hat W=sq
+W \rightarrow q= \mathrm{round}(W/s) \rightarrow \hat W=sq
 ```
 
 前向传播使用 $`\hat W`$，而模型实际保存和更新的通常仍然是浮点参数
