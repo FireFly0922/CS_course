@@ -48,7 +48,7 @@ AI 辅导内容包括题目翻译、概念讲解、API 说明、测试设计、�
 
 ### 项目路径
 
-`CS336_projects/phase0-pytorch-bridge/`
+`D:\CS_course\AI_Labs\P0\P0.py`
 
 ### 任务
 
