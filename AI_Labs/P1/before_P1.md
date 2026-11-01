@@ -117,4 +117,209 @@ embedding只解决了让文字能被模型认识，对应到token，但是没有
 
 专门为position创建一个embedding :\
 token embedding的shape=[V,C] ; position embedding的shape=[max_seq_len,C]\
-对位置t : $x[b,t] = token\_embedding[token_id] + position\_embedding[t]$
+对位置t : $x[b,t] = token\_embedding[token\_id] + position\_embedding[t]$
+
+```python
+class TokenPositionEmbedding(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        max_seq_len: int,
+        d_model: int,
+    ):
+        super().__init__()
+
+        self.max_seq_len = max_seq_len
+
+        self.token_embedding = nn.Embedding(
+            num_embeddings=vocab_size,
+            embedding_dim=d_model,
+        )
+
+        self.position_embedding = nn.Embedding(
+            num_embeddings=max_seq_len,
+            embedding_dim=d_model,
+        )
+
+    def forward(self, input_ids):
+        # input_ids: [B, T]
+
+        batch_size, seq_len = input_ids.shape
+
+        if seq_len > self.max_seq_len:
+            raise ValueError(
+                f"seq_len={seq_len} exceeds "
+                f"max_seq_len={self.max_seq_len}"
+            )
+
+        position_ids = torch.arange(
+            seq_len,
+            device=input_ids.device,
+        )
+        # [T]
+
+        token_x = self.token_embedding(input_ids)
+        # [B, T, C]
+
+        position_x = self.position_embedding(position_ids)
+        # [T, C]
+
+        x = token_x + position_x
+        # [B, T, C] + [T, C]
+        # position_x 会在 batch 维广播
+
+        return x
+```
+
+### 正余弦位置编码
+
+$$PE(pos,2i)=\sin\left(\frac{pos}{10000^{2i/C}}\right)$$
+$$PE(pos,2i+1)=\cos\left(\frac{pos}{10000^{2i/C}}\right)$$
+也就是不学习位置矩阵 : pos表示token位置 ; i表示维度对的编号
+
+```python
+class SinusoidalPositionEncoding(nn.Module):
+    def __init__(
+        self,
+        max_seq_len: int,
+        d_model: int,
+    ):
+        super().__init__()
+
+        if d_model % 2 != 0:
+            raise ValueError("d_model must be even")
+
+        # [T, 1]
+        position = torch.arange(max_seq_len,dtype=torch.float32).unsqueeze(1)
+
+        # [C / 2]
+        div_term = torch.exp(
+            torch.arange(0,d_model,2,dtype=torch.float32) * (-math.log(10000.0) / d_model)
+            )
+
+        pe = torch.zeros(max_seq_len,d_model)
+
+        # 偶数维
+        pe[:, 0::2] = torch.sin(position * div_term)   # 切片操作，表示：所有行维度，列维度从0开始每次+2
+
+        # 奇数维
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        self.register_buffer("pe",pe)   # 下面会讲解其和parameter的区别
+
+    def forward(
+        self,
+        x,
+        start_pos: int = 0,
+    ):
+        # x: [B, T, C]
+
+        seq_len = x.shape[1]
+        end_pos = start_pos + seq_len
+
+        position_x = self.pe[start_pos:end_pos]
+        # [T, C]
+
+        position_x = position_x.to(dtype=x.dtype)
+
+        return x + position_x.unsqueeze(0)
+```
+
+`nn.Parameter`通常`requires_grad = True`，会交给优化器更新参数\
+`register_buffer`不是可训练参数，会随着model.to(device)搬运
+
+## 单头 Scaled Dot-Product Attention
+
+### Attention 公式的理解
+
+对一个token,在key、Value、Query三个维度有不同的映射，"映射"这一过程，是通过训练三个矩阵得到的
+$$\text{Attention}(Q,K,V) = \text{softmax} ( \frac{QK^{\top}}{\sqrt{d_k}} + M )V$$
+
+- $q_i^{\top}j_j$
+
+通过点积计算两向量的匹配度$$q_i^{\top}k_j = \sum_{r=1}^{d_k} q_{ir} k_{jr}$$
+也就是说每个q都要和所有k比较，从而计算出第i个token认为第j个token有多相关
+
+- 为什么缩放系数和$d_k$有关
+
+在计算$QK^{\top}$时，$
+Q=\begin{bmatrix}
+q_{11} & q_{12} & q_{13}\\
+q_{21} & q_{22} & q_{23} 
+\end{bmatrix}$, $
+K^\mathsf T=
+\begin{bmatrix}
+k_{11} & k_{21}\\
+k_{12} & k_{22}\\
+k_{13} & k_{23}
+\end{bmatrix}$
+
+$QK^\mathsf T=
+\begin{bmatrix}
+q_{11}k_{11}+q_{12}k_{12}+q_{13}k_{13} & q_{11}k_{21}+q_{12}k_{22}+q_{13}k_{23}
+\\
+q_{21}k_{11}+q_{22}k_{12}+q_{23}k_{13} & q_{21}k_{21}+q_{22}k_{22}+q_{23}k_{23}
+\end{bmatrix}$
+
+随着d增大, $QK^{\top}$矩阵中每一元素也会增大，也就是说缩放系数和d有关(这里的d指KQV的列数)
+
+- 为什么除以的是$\sqrt{d_k}$, 而不是$d_k$
+
+我们的目标是让Attention logits中的典型数值范围保持基本不变\
+$QK^{\top}$矩阵的方差随$d_k$线性增长，所以实际数值尺度(标准差)与$\sqrt{d_k}$成正比
+
+### 完整单头缩放点积注意力的组成
+
+简单来说就是 : 生成QKV → 计算QK相关性 → 缩放 → Causal mask → 对K维做softmax → 聚合V
+
+```python
+class SingleHeadCausalAttention(nn.Module):
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dim = dim
+        self.q_proj = nn.Linear(dim, dim, bias=False)
+        self.k_proj = nn.Linear(dim, dim, bias=False)
+        self.v_proj = nn.Linear(dim, dim, bias=False)
+    def forward(self, x: torch.Tensor):
+        B, T, C = x.shape
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        scores = q @ k.transpose(0,1)      # QK相关性
+        scores = scores / math.sqrt(C)     # 缩放
+        # 下面会讲解这2句代码是怎么实现因果掩码的
+        mask = torch.tril(torch.ones(T,T,device=x.device,dtype=torch.bool)) 
+        scores = scores.masked_fill(~mask, float("-inf"))
+        atten_weights = torch.softmax(scores, dim=-1) # 对k维度做softmax求概率
+        output = atten_weights @ v # 聚合V(套公式,此时shape为[B,T,C])
+        return output, atten_weights
+```
+
+- attention的核心"因果掩码"
+
+`torch.ones(T,T,device=x.device,dtype=torch.bool)`先创建一个全为1,shape=[T,T]的，并将其中的1转换成bool格式\
+`mask = torch.tril(…)`取下三角矩阵置1，其他部分置0，也就是False\
+`scores = scores.masked_fill(~mask, float("-inf"))`先对mask取反，因为masked_fill填充的是True的部分，将上三角区域填充为`-inf`，这是因为softmax计算时会对元素取e的指数，$e^{-inf}$可以得到0\
+这样实现了求第a个token的Attention时只能看到前a个token，防止提前看到正确答案
+
+项目中一般使用pytorch中已有的Attention的API`torch.nn.functional.scaled_dot_product_attention`
+
+```python
+torch.nn.functional.scaled_dot_product_attention(
+    query,
+    key,
+    value,
+    attn_mask=None,
+    dropout_p=0.0,
+    is_causal=False,
+    scale=None,
+    enable_gqa=False,
+)
+```
+
+由于涉及了一些新概念，在下一节中会详细讲解
+
+## Multi-Head Attention
+
+多头注意力(简称MHA)将隐藏维度切成多个子空间，可以理解为从多个角度学习问题\
+将[B, T, C]reshape成[B, T, H, D]，SDPA(缩放点积注意力)希望接收[B, H, T, D]
