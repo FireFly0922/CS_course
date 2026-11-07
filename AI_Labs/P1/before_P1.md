@@ -322,4 +322,228 @@ torch.nn.functional.scaled_dot_product_attention(
 ## Multi-Head Attention
 
 多头注意力(简称MHA)将隐藏维度切成多个子空间，可以理解为从多个角度学习问题\
-将[B, T, C]reshape成[B, T, H, D]，SDPA(缩放点积注意力)希望接收[B, H, T, D]
+将[B, T, C]reshape成[B, T, H, D]，SDPA(缩放点积注意力)希望接收[B, H, T, D], 需要transpose\
+便于理解的完整MHA(Multi-Head Attention)实现在`AI_Labs\P1\MHA.py`\
+另外，一般定义split_heads和merge_heads, 定义merge_heads时需要contiguous将内存连续, 输出时需要merge_heads
+
+这里只展示封装最完善的`nn.MultiheadAttention`版本实现，另外两种自定义性较强的版本在`AI_Labs\P1\MHA.py`\
+这种写法是最方便的，但是可能不太方便自定义 RoPE、KV Cache、GQA 等
+
+```python
+import torch
+import torch.nn as nn
+
+torch.manual_seed(42)
+
+B, T, C = 2, 4, 8
+H = 2
+
+x = torch.randn(B, T, C)
+
+mha = nn.MultiheadAttention(
+    embed_dim=C,
+    num_heads=H,
+    batch_first=True,
+)
+
+# nn.MultiheadAttention 中：
+# True 表示该位置要被屏蔽
+causal_mask = torch.triu(
+    torch.ones(T, T, dtype=torch.bool),
+    diagonal=1,
+)
+
+output, weights = mha(
+    query=x,
+    key=x,
+    value=x,
+    attn_mask=causal_mask,
+    need_weights=True,
+    average_attn_weights=False,
+)
+
+print("output:", output.shape)
+print("weights:", weights.shape)
+```
+
+## 旋转位置编码(RoPE)
+
+之前学过绝对位置编码，RoPE也是一种让Attention理解词语"位置"的方法\
+先进行数学推导：\
+$R$指对某位置token的旋转矩阵
+$$q_m' = R_m q_m ; k_n' = R_n k_n$$
+$$(q_m')^{\top} k_n' = q_m^{\top} R_m^{\top} R_n k_n = q_m^{\top} R_{n-m} k_n$$
+旋转并不会改变向量的模长，由上面的推导可以得到这样转置矩阵计算后的两个token只与$n-m$相对距离有关\
+实现的RoPE在`AI_Labs\P1\RotaryEmbedding.py`，后面学习完这些概念后会实现一个完整的teansformer
+
+## Transformer的其它组件与连接方式
+
+### LayerNorm
+
+对同一层单个样本进行归一化，用于稳定训练过程、加速收敛
+$$\text{LayerNorm}(v) = \gamma \frac{v-\mu}{\sigma} + \beta$$
+这里计算均值和标准差是对同一层的所有神经元进行计算，另外计算标准差时$\sigma = \sqrt{\frac{1}{d} \sum_{i=1}^d(v_i - \mu)^2 + \epsilon}$中的$\epsilon$是一个极小量防止计算归一化公式时出现0
+
+这里$\gamma$和$\beta$是可学习参数
+
+### 残差连接
+
+这种方法可以让信息跳过某些层传递，普通的网络学习恒等映射，残差网络学习$y = F(x) + x$, 损失函数为$\mathcal L$，有$\frac{\partial\mathcal L}{\partial x} = \frac{\partial\mathcal L}{\partial y}\left(I+\frac{\partial F(x)}{\partial x}\right) = \frac{\partial\mathcal L}{\partial x} = \frac{\partial\mathcal L}{\partial y}+\frac{\partial\mathcal L}{\partial y}\frac{\partial F(x)}{\partial x}$
+
+现代LLM常用$x_{new} = x + F(Norm(x))$的`Pre-Norm`形式残差路径
+
+```python
+class TransformerBlock(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        attention,
+        ffn,
+    ):
+        super().__init__()
+        self.attention_norm = nn.RMSNorm(
+            embed_dim,
+            eps=1e-6,
+        )
+        self.attention = attention
+        self.ffn_norm = nn.RMSNorm(
+            embed_dim,
+            eps=1e-6,
+        )
+        self.ffn = ffn
+    def forward(
+        self,
+        x,
+        start_pos=0,
+    ):
+        # 第一个残差分支
+        residual = x
+        normalized = self.attention_norm(x)
+        attention_output = self.attention(
+            normalized,
+            start_pos=start_pos,
+        )
+        x = residual + attention_output
+        # 第二个残差分支
+        residual = x
+        normalized = self.ffn_norm(x)
+        ffn_output = self.ffn(normalized)
+        x = residual + ffn_output
+        return x
+```
+
+### RMSNorm
+
+对输入的[B, T, C]的最后一维C进行独立的归一化
+$$\operatorname{RMS}(x) = \sqrt{\frac{1}{C}\sum_{i=1}^{C}x_i^2+\epsilon}$$
+$$\operatorname{RMSNorm}(x) = \gamma\odot\frac{x}{\operatorname{RMS}(x)}$$
+
+在写代码时，一般使用的$$\operatorname{normalized}(x_i) = x_i\cdot\frac{1}{\sqrt{\frac{1}{d}\sum_{j=1}^{d}x_j^2+\epsilon}}$$
+完整RMSNorm$$\operatorname{RMSNorm}(x) = \gamma\odot\frac{x}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon}}$$
+
+手写版本的RMSNorm
+
+```python
+class ManualRMSNorm(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        eps: float = 1e-6,
+    ):
+        super().__init__()
+        self.eps = eps
+        # 每个隐藏维度都有一个可训练缩放值
+        self.weight = nn.Parameter(torch.ones(dim))
+        # 这里是创建一个会被模型训练更新的参数向量
+
+    def forward(self, x):
+        # x: [B, T, C]
+        input_dtype = x.dtype
+        # 归一化统计通常在 float32 中计算
+        x_float = x.float()
+        mean_square = (x_float.pow(2).mean(dim=-1, keepdim=True)) # pow(2)是将其平方
+        inverse_rms = torch.rsqrt(mean_square + self.eps) # rsqrt表示$\frac{1}{\sqrt{x}}$
+        normalized = x_float * inverse_rms
+        normalized = normalized.to(dtype=input_dtype)
+        # weight: [C]
+        # 自动广播到 [B,T,C]
+        return normalized * self.weight
+```
+
+pytorch提供简单的api封装版本`nn.RMSNorm(normalized_shape, esp=None, elementwise_affine=True)`
+
+```python
+nore = nn.RMSNorm(normalized_shape=8, esp=1e-6)
+z = torch.randn(2,3,8)
+y = norm(x)
+```
+
+上面手写版的RMSNorm中，为什么要转换成float32 ?\
+用低精度保存和计算，但是敏感的操作还是需要使用高精度，如“平方和、均值、倒数平方根等统计操作”，这样的操作比如还有：RMSNorm/LayerNorm中的统计量；softmax中的内部运算等
+
+### FFN层
+
+在transformer中，FFN(前馈网络)负责对每个token内部特征进行非线性加工, 其在transformer block中一般先让Attention混合不同token, 之后将混合了不同token的结果交给FFN层\
+经典的Transformer FFN公式$$\text{FFN}(x) = \text{ReLU}(x W_1^{\top} + b_1) W_2 + b_2$$
+这里还需要了解上投影(通过线性层让维数低的变高,eg:[B,T,C]→[B,T,F] , C < F)和下投影(C > F), 下面展示一个典型的FFN
+
+```python
+class FeedForward(nn.Module):
+    def __init__(
+        self,
+        embed_dim: int,
+        hidden_dim: int,
+    ):
+        super().__init__()
+        self.up_proj = nn.Linear(embed_dim,hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim,embed_dim)
+
+    def forward(self, x):
+        # x: [B,T,C]
+        hidden = self.up_proj(x)
+        # [B,T,C] → [B,T,F]
+        hidden = F.relu(hidden)
+        # [B,T,F]，shape 不变
+        output = self.down_proj(hidden)
+        # [B,T,F] → [B,T,C]
+        return output
+```
+
+### SiLU/Swish
+
+定义$\text{SiLU}(x) = x \sigma(x)$,这里的$\sigma$来自softmax,即$\sigma(x) = \frac{1}{1+e^{-x}}$, 在`torch.nn.functional`中调用`F.silu(x)`等同于`x * torch.sigmoid(x)`
+
+### SwiGLU
+
+对比普通FFN, 现代Decoder only的LLM大多使用SwiGLU作为FFN/MLP, 其在两条投影上有分支
+
+```text
+                  ┌→ gate_proj → SiLU ─┐
+x ────────────────┤                    ├→ 逐元素乘法 → down_proj
+                  └→ up_proj ──────────┘
+```
+
+上面的gate_proj是门控，用于控制信息通过多少
+
+```python
+class SwiGLU(nn.Module):
+    def __init__(
+        self,
+        embed_dim,
+        hidden_dim,
+    ):
+        super().__init__()
+        self.gate_proj = nn.Linear(embed_dim,hidden_dim,bias=False)
+        self.up_proj = nn.Linear(embed_dim,hidden_dim,bias=False)
+        self.down_proj = nn.Linear(hidden_dim,embed_dim,bias=False)
+
+    def forward(self, x):
+        gate_logits = self.gate_proj(x)
+        gate = F.silu(gate_logits)
+        value = self.up_proj(x)
+        hidden = gate * value
+        output = self.down_proj(hidden)
+        return output
+```
+
+在数学上$\left[\operatorname{SiLU}(xW_g^\mathsf T) \odot (xW_u^\mathsf T)\right]W_d^\mathsf T$, 可以拆开来看 : 门控信号$x W_g^{\top}$对当前token生成一组调制值 ; 另外的Value分支$x W_u^{\top}$负责产生候选内容，可以理解为对某个中间维度j, Value分支决定提供特征内容, gate分支决定如何修改这个feature
