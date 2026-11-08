@@ -27,7 +27,7 @@ Attention is all you need !
 
 embedding的本质是用一个token ID，从可训练矩阵中取出对应的一行，这个可训练矩阵的`shape=[V,d]`,每一行表示一个token,列表示embedding dimension\
 embedding查表时通过检索对应token ID的`embedding_matrix[token_id]`\
-在真实处理时，一段话先被转换成其token ID(在词库中的位置,shape是一个一维tensor $token\_ids = [x_1,x_2,…,x_V]$ , $x_i$ 表示这个token在词库中的id),embedding查表的过程就是找到行数为i的token
+在真实处理时，一段长度为 $T$ 的文本先被转换成一维tensor $token\_ids = [x_1,x_2,…,x_T]$，其中 $x_t$ 表示第 $t$ 个位置的token ID；embedding查表就是取出`embedding_matrix[x_t]`
 
 常用api
 
@@ -39,7 +39,7 @@ nn.Embedding(
     sparse=False,
 )
 
-token_ids = torch.tensor([x_1, x_2, x_V])
+token_ids = torch.tensor([x_1, x_2, x_T])
 output = embedding(token_ids)
 ```
 
@@ -110,7 +110,7 @@ print(lm_head.weight.grad)
 ## position
 
 embedding只解决了让文字能被模型认识，对应到token，但是没有得到"这个token在什么位置"\
-虽然训练时Decoder的causal mask(单向注意力掩码:在训练阶段，本身需要模型预测下一个token，如果不进行掩码，模型将能看到完整的token序列，训练就不起作用了)对位置本身有一定顺序，但是还需要专门的位置机制\
+虽然训练时Decoder的causal mask规定了“只能看当前位置及之前的位置”，引入了方向约束，但它不能为每个token提供明确的绝对或相对位置信息，所以仍需要专门的位置机制\
 常用方法：可学习绝对位置嵌入；固定正余弦位置编码；相对位置编码；RoPE(现代 LLM 最常见的方案之一)
 
 ### 可学习位置嵌入
@@ -235,7 +235,7 @@ class SinusoidalPositionEncoding(nn.Module):
 对一个token,在key、Value、Query三个维度有不同的映射，"映射"这一过程，是通过训练三个矩阵得到的
 $$\text{Attention}(Q,K,V) = \text{softmax} ( \frac{QK^{\top}}{\sqrt{d_k}} + M )V$$
 
-- $q_i^{\top}j_j$
+- $q_i^{\top}k_j$
 
 通过点积计算两向量的匹配度$$q_i^{\top}k_j = \sum_{r=1}^{d_k} q_{ir} k_{jr}$$
 也就是说每个q都要和所有k比较，从而计算出第i个token认为第j个token有多相关
@@ -285,7 +285,7 @@ class SingleHeadCausalAttention(nn.Module):
         q = self.q_proj(x)
         k = self.k_proj(x)
         v = self.v_proj(x)
-        scores = q @ k.transpose(0,1)      # QK相关性
+        scores = q @ k.transpose(-2,-1)    # [B,T,C] @ [B,C,T] → [B,T,T]
         scores = scores / math.sqrt(C)     # 缩放
         # 下面会讲解这2句代码是怎么实现因果掩码的
         mask = torch.tril(torch.ones(T,T,device=x.device,dtype=torch.bool)) 
@@ -373,14 +373,14 @@ print("weights:", weights.shape)
 $R$指对某位置token的旋转矩阵
 $$q_m' = R_m q_m ; k_n' = R_n k_n$$
 $$(q_m')^{\top} k_n' = q_m^{\top} R_m^{\top} R_n k_n = q_m^{\top} R_{n-m} k_n$$
-旋转并不会改变向量的模长，由上面的推导可以得到这样转置矩阵计算后的两个token只与$n-m$相对距离有关\
-实现的RoPE在`AI_Labs\P1\RotaryEmbedding.py`，后面学习完这些概念后会实现一个完整的teansformer
+旋转并不会改变向量的模长。上式说明Attention点积中的位置旋转项只与$n-m$这一相对距离有关；完整点积仍然同时依赖$q_m$和$k_n$的内容\
+实现的RoPE在`AI_Labs\P1\RotaryEmbedding.py`，后面学习完这些概念后会实现一个完整的Transformer
 
 ## Transformer的其它组件与连接方式
 
 ### LayerNorm
 
-对同一层单个样本进行归一化，用于稳定训练过程、加速收敛
+对Transformer输入`[B,T,C]`中的每个token，沿最后一个隐藏维度`C`独立归一化，用于稳定训练过程
 $$\text{LayerNorm}(v) = \gamma \frac{v-\mu}{\sigma} + \beta$$
 这里计算均值和标准差是对同一层的所有神经元进行计算，另外计算标准差时$\sigma = \sqrt{\frac{1}{d} \sum_{i=1}^d(v_i - \mu)^2 + \epsilon}$中的$\epsilon$是一个极小量防止计算归一化公式时出现0
 
@@ -388,9 +388,9 @@ $$\text{LayerNorm}(v) = \gamma \frac{v-\mu}{\sigma} + \beta$$
 
 ### 残差连接
 
-这种方法可以让信息跳过某些层传递，普通的网络学习恒等映射，残差网络学习$y = F(x) + x$, 损失函数为$\mathcal L$，有$\frac{\partial\mathcal L}{\partial x} = \frac{\partial\mathcal L}{\partial y}\left(I+\frac{\partial F(x)}{\partial x}\right) = \frac{\partial\mathcal L}{\partial x} = \frac{\partial\mathcal L}{\partial y}+\frac{\partial\mathcal L}{\partial y}\frac{\partial F(x)}{\partial x}$
+这种方法可以让信息跳过某些层传递。残差分支学习$y = F(x) + x$；即使$F$暂时学不到有效变换，模型仍然可以通过$x$保留恒等映射。
 
-现代LLM常用$x_{new} = x + F(Norm(x))$的`Pre-Norm`形式残差路径
+现代LLM常用$x_{new} = x + F(Norm(x))$的`Pre-Norm`形式残差路径。若$y=x+F(x)$，则$\frac{\partial\mathcal L}{\partial x}=\frac{\partial\mathcal L}{\partial y}\left(I+\frac{\partial F(x)}{\partial x}\right)$，其中$I$提供直接的梯度通路
 
 ```python
 class TransformerBlock(nn.Module):
@@ -470,11 +470,11 @@ class ManualRMSNorm(nn.Module):
         return normalized * self.weight
 ```
 
-pytorch提供简单的api封装版本`nn.RMSNorm(normalized_shape, esp=None, elementwise_affine=True)`
+pytorch提供简单的api封装版本`nn.RMSNorm(normalized_shape, eps=None, elementwise_affine=True)`
 
 ```python
-nore = nn.RMSNorm(normalized_shape=8, esp=1e-6)
-z = torch.randn(2,3,8)
+norm = nn.RMSNorm(normalized_shape=8, eps=1e-6)
+x = torch.randn(2,3,8)
 y = norm(x)
 ```
 
@@ -484,8 +484,8 @@ y = norm(x)
 ### FFN层
 
 在transformer中，FFN(前馈网络)负责对每个token内部特征进行非线性加工, 其在transformer block中一般先让Attention混合不同token, 之后将混合了不同token的结果交给FFN层\
-经典的Transformer FFN公式$$\text{FFN}(x) = \text{ReLU}(x W_1^{\top} + b_1) W_2 + b_2$$
-这里还需要了解上投影(通过线性层让维数低的变高,eg:[B,T,C]→[B,T,F] , C < F)和下投影(C > F), 下面展示一个典型的FFN
+经典的Transformer FFN公式$$\text{FFN}(x) = \text{ReLU}(x W_1^{\top} + b_1) W_2^{\top} + b_2$$
+这里还需要了解上投影(通过线性层让维数从`C`变为更大的`F`, eg:[B,T,C]→[B,T,F])和下投影(从`F`恢复为`C`, [B,T,F]→[B,T,C])，下面展示一个典型的FFN
 
 ```python
 class FeedForward(nn.Module):
@@ -511,7 +511,7 @@ class FeedForward(nn.Module):
 
 ### SiLU/Swish
 
-定义$\text{SiLU}(x) = x \sigma(x)$,这里的$\sigma$来自softmax,即$\sigma(x) = \frac{1}{1+e^{-x}}$, 在`torch.nn.functional`中调用`F.silu(x)`等同于`x * torch.sigmoid(x)`
+定义$\text{SiLU}(x) = x \sigma(x)$，这里的$\sigma$是sigmoid而不是softmax，即$\sigma(x) = \frac{1}{1+e^{-x}}$；在`torch.nn.functional`中调用`F.silu(x)`等同于`x * torch.sigmoid(x)`
 
 ### SwiGLU
 
@@ -547,3 +547,48 @@ class SwiGLU(nn.Module):
 ```
 
 在数学上$\left[\operatorname{SiLU}(xW_g^\mathsf T) \odot (xW_u^\mathsf T)\right]W_d^\mathsf T$, 可以拆开来看 : 门控信号$x W_g^{\top}$对当前token生成一组调制值 ; 另外的Value分支$x W_u^{\top}$负责产生候选内容，可以理解为对某个中间维度j, Value分支决定提供特征内容, gate分支决定如何修改这个feature
+
+## 完整Decoder-only Transformer前向
+
+前面学习了很多transformer的组件，下面先梳理一下这些组件是如何连接的，数据流如何流动: \
+token_ids [B,T] → token embedding → [B, T, C] → n个transformer block → final RMSNorm [B, T, C] → LM head → logits [B, T, V] → Cross-Entropy Loss
+
+### token ID 到 [B,T,C]
+
+通过Embedding查表将原本[B, T]的token_id映射为[B, T, C]，后面的Transformer都在处理这个隐藏维度C\
+值得注意的是一般不在这里进行RoPE
+
+### Transformer Block
+
+分别展示两条数据流，但是这里说的可能不太清楚，还是看代码直观：
+
+- RMSNorm → Attention :\
+先对每个token归一化，这一步中shape不变；Attention经过三个linear生成shape为[B, T, C]的QKV，再reshape为[B, T, H, D]并transpose为[B, H, T, D]。RoPE作用于这个layout下的Q和K，之后计算Attention、合并heads、输出投影，并与进入该分支前的residual相加。
+
+- RMSNorm → SwiGLU :\
+先对Attention残差相加后的[B, T, C]再次进行RMSNorm，再经过SwiGLU的`C → F → C`变换，最后与进入FFN分支前的residual相加。
+
+### LM Head(Language Modeling Head语言输出头)
+
+经过了Transformer block后,由于LLM最终的问题是“预测下一个token”, 需要对当前的[B, T, C]进行一些处理\
+LM Head其实只是一个线性层$\text{logits}_{b,t,:} = x_{b,t} W^{\top}$，其中$W$的shape为[V,C]，输出logits的shape为[B,T,V]。$\text{logits}_{b,t,v}$可以理解为当前隐藏状态和词表中第$v$个输出向量的点积，点积越大，模型越倾向于预测该token。logits是未归一化分数，训练时直接传给Cross-Entropy，不要提前softmax。
+
+Embedding权重和LM Head权重的shape都是[V,C]，可以通过`lm_head.weight = token_embedding.weight`进行weight tying，从而减少参数量。
+
+### Next-token Prediction与Cross-Entropy
+
+语言模型学习的是预测下一个token。例如原始序列为`[BOS, 我, 喜欢, 猫, EOS]`，则输入为`[BOS, 我, 喜欢, 猫]`，targets为`[我, 喜欢, 猫, EOS]`。causal mask负责阻止模型看到未来输入，shifted targets负责规定每个位置应该预测的下一个token，两者职责不同。
+
+```python
+input_ids = tokens[:, :-1]   # [B,T]
+targets = tokens[:, 1:]      # [B,T]，dtype必须是torch.long
+
+logits = model(input_ids)    # [B,T,V]
+loss = F.cross_entropy(
+    logits.reshape(-1, vocab_size),
+    targets.reshape(-1),
+    ignore_index=-100,
+)
+```
+
+如果数据集已经构造了错开一位的`input_ids`和`targets`，模型内部就不能再次shift。`ignore_index=-100`可用于忽略padding或SFT中不参与训练的位置。
