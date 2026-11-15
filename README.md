@@ -17,9 +17,9 @@
 
 ```text
 PyTorch 基础
-→ Diy-LLM + CS336：Transformer 与最小训练闭环
-→ Diy-LLM 第 10 章 + CS336 Inference：推理基础
-→ zero-to-sglang：从推理概念到 Mini SGL
+→ Diy-LLM + CS336：Transformer 与最小训练闭环（并行少量 C++ 工程桥接）
+→ 推理基础 + cpp-llm-engine：CPU 模型执行与 KV Cache
+→ cpp-llm-engine：缓存、调度与服务；zero-to-sglang：框架设计对照
 → mini-sglang：阅读并实验真实轻量推理框架
 → 面向 Agentic RL 的 rollout runtime
 → CS336 Alignment + Diy-LLM RLVR
@@ -33,16 +33,33 @@ Kernel、CUDA 和 Triton 不再作为独立主线，而是贯穿其中的“框�
 | 阶段 | 学习 / 项目 | 核心产物 | 状态 |
 |---|---|---|---|
 | Phase 0 | PyTorch Training Bridge | 训练/评估循环、autograd、shape/stride、基础测试 | ✅ 基本完成 |
-| Phase 1 | Transformer Foundations | MHA、RoPE、tensor layout、Tiny Transformer | 🔓 进行中 |
-| Phase 2 | TinyLM Training Loop | tokenizer、Transformer、训练、checkpoint、generation | ⬜ |
-| Phase 3 | Inference Foundations | Naive/KV Cache、Prefill/Decode、指标与资源核算 | ⬜ |
-| Phase 4 | Build a Mini SGL | 请求生命周期、HTTP、continuous batching、scheduler、Paged/Radix Cache | ⬜ |
+| Phase 1 | Transformer Foundations | MHA、RoPE、tensor layout、Tiny Transformer；少量 C++ 桥接 | 🔓 进行中 |
+| Phase 2 | TinyLM Training Loop | 最小训练/恢复/生成；C0 后并行 C++ 加载与 Tensor 底座 | ⬜ |
+| Phase 3 | Inference Foundations | Naive/KV Cache、Prefill/Decode、C++ 模型执行、指标与 C1 | ⬜ |
+| Phase 4 | C++ Inference Runtime + Mini SGL 对照 | 请求生命周期、HTTP、continuous batching、scheduler、Paged/Prefix Cache | ⬜ |
 | Phase 5 | Read Mini-SGLang | 真实框架源码地图、chunked prefill、overlap、CUDA Graph、TP、backend | ⬜ |
 | Phase 6 | Inference Runtime Portfolio | 服务、调度、缓存、观测、SLO 与可复现性能报告 | ⬜ |
 | Phase 7 | Rollout Runtime | 异步 rollout、多轮/工具调用、轨迹元数据、backpressure | ⬜ |
 | Phase 8 | Alignment → Agentic RL | CS336 Alignment、Diy-LLM RLVR、Agentic RL 实验 | ⬜ |
 
 详细任务、门槛和验收标准见 [AI_Labs/AI_Labs.md](AI_Labs/AI_Labs.md)。项目交付清单见 [CS336_projects/README.md](CS336_projects/README.md)。
+
+## cpp-llm-engine 如何加入（2026-11-13 更新）
+
+以 `cpp-llm-engine` 为 C++/端侧推理基础的工程载体，以 `llm-algo-leetcode` 为按需选读的原理和实验库。保留 Phase 0–8 编号与后续 rollout / Agentic RL 目标，不同时完整重写 C++ 引擎和 Python Mini SGL。
+
+| 进入范围 | 前置条件 | 当前判断 |
+|---|---|---|
+| C++ Foundation 准备 | 基本编程能力；按需补 C++ 语法、引用、容器、类与资源生命周期 | 可以开始准备；C++ 熟练度尚未验收 |
+| Chapter00–03：基线、加载、Tensor、算子 | C0 工程门槛：Linux/WSL2、C++17、CMake 3.20+、CTest；能独立完成所有权/shape/错误路径练习 | 待验收；不要求先完成全部模型课程 |
+| Chapter04–06：Decoder 与生成 | C0 + Gate 1：MHA、RoPE、layout、Norm/FFN、token→logits；本计划默认在 Phase 2 后系统推进 | 尚未达到，先完成当前 Phase 1 |
+| Chapter07–10：缓存、调度与服务 | Gate 2、Gate 3 + C1：最小训练闭环、正确生成、KV 一致性、容量与指标 | 后续阶段 |
+
+上述门槛是个人学习安排，不是组队活动官方报名条件。当前没有确认 C++/WSL2/编译环境已就绪；报名或跑通参考实现都不代表门槛通过。详细检查表见执行计划第 3.1 节。
+
+项目统一在计划路径 `CS336_projects/cpp-inference-runtime/` 积累，按 bridge → execution → serving 递进；`mini-sgl-labs/` 保留源码对照与差异实验。目录按实际任务创建，计划路径不代表已有实现。
+
+当前建议约 2/3 时间完成 Phase 1、1/3 做 C++ 桥接；以验收而非活动日期升级。端侧方向优先练习内存、量化、加载、CPU/backend 和单请求性能，设备专用部署在选定真实目标硬件后开展。
 
 ## 当前进度与下一节
 
@@ -165,5 +182,8 @@ CS336 正式作业的核心实现、数学题和 writeup 由学习者独立完�
 - [zero-to-sglang](https://github.com/datawhalechina/zero-to-sglang)
 - [mini-sglang](https://github.com/sgl-project/mini-sglang)
 - [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
+- [cpp-llm-engine 使用说明](https://github.com/datawhalechina/cpp-llm-engine/blob/main/USAGE.md)
+- [cpp-llm-engine CPU 学习计划](https://github.com/datawhalechina/cpp-llm-engine/blob/main/source/guides/cpu_learning_plan.md)
+- [llm-algo-leetcode](https://github.com/datawhalechina/llm-algo-leetcode)
 
-资料结构最后核对：2026-10-31。zero-to-sglang 仍在持续编写，开始对应阶段前应重新检查章节状态。
+cpp-llm-engine 与 llm-algo-leetcode 资料核对：2026-11-13（文档及部分源码抽查，未运行完整测试）。其他课程沿用 2026-10-31 的核对记录；开始对应阶段前重新检查章节状态。

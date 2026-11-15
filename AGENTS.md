@@ -23,9 +23,9 @@
 
 ```text
 PyTorch 基础
-→ Diy-LLM + CS336：Transformer 与最小训练闭环
-→ Diy-LLM 第 10 章 + CS336 Inference：推理基础
-→ zero-to-sglang：从推理概念到 Mini SGL
+→ Diy-LLM + CS336：Transformer 与最小训练闭环（并行少量 C++ 工程桥接）
+→ 推理基础 + cpp-llm-engine：CPU 模型执行与 KV Cache
+→ cpp-llm-engine：缓存、调度与服务；zero-to-sglang：框架设计对照
 → mini-sglang：阅读并实验真实轻量推理框架
 → 面向 Agentic RL 的 rollout runtime
 → CS336 Alignment + Diy-LLM RLVR
@@ -38,6 +38,7 @@ PyTorch 基础
 - Phase 1 已完成 Embedding、位置编码概览和单头 Scaled Dot-Product Attention。
 - 下一节必须从 Multi-Head Attention、RoPE 和 tensor layout 开始。
 - 只有在前置知识确实造成阻塞时才回补；回补应使用最小 toy example，不得无限扩展课程范围。
+- 2026-11-13 纳入 cpp-llm-engine：Foundation/环境可并行准备，模型执行与 runtime 按 `AI_Labs/AI_Labs.md` 的 C0/C1 和阶段门槛推进。C++ 熟练度与环境尚未验收，不默认已掌握。`llm-algo-leetcode` 按需选读；不再要求重复完整实现 Python Mini SGL。
 
 ## 4. 教学协议
 

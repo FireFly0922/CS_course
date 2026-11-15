@@ -592,3 +592,9 @@ loss = F.cross_entropy(
 ```
 
 如果数据集已经构造了错开一位的`input_ids`和`targets`，模型内部就不能再次shift。`ignore_index=-100`可用于忽略padding或SFT中不参与训练的位置。
+
+## start Tiny_transformer
+
+至此，我们可以开始进行`Tiny_transformer`的内容了，其实就是将前面学习过的"块"拼起来，由于不熟悉结构，可能直接从零开始写有点困难, 可以参考`AI_Labs\P1\Tiny_transformer_start.py`中的接口，手动实现一遍细节
+
+完整的`Tiny_transformer`实现在`AI_Labs\P1\Tiny_transformer.py`

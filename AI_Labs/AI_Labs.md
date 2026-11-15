@@ -1,6 +1,6 @@
 # LLM 推理框架与 Agentic RL 执行计划
 
-> 版本：2026-10-31。Phase 0 已基本完成；当前从 Phase 1 的 Multi-Head Attention、RoPE 和 tensor layout 继续。
+> 版本：2026-11-13。Phase 0 已基本完成；当前从 Phase 1 的 Multi-Head Attention、RoPE 和 tensor layout 继续。纳入 cpp-llm-engine 工程实践，不改变学习者先实现、AI review 的教学协议。
 
 ## 1. 最终目标
 
@@ -9,8 +9,9 @@
 ```text
 PyTorch / Tensor
 → Transformer / 最小训练闭环
-→ 自回归推理 / KV Cache
-→ Request / Scheduler / Cache / Serving
+  （并行 C++ 工程与 Tensor 所有权桥接）
+→ 自回归推理 / KV Cache / C++ CPU 执行
+→ C++ Request / Scheduler / Cache / Serving + Mini SGL 设计对照
 → 真实推理框架源码与实验
 → Rollout Runtime
 → RLVR / Agentic RL
@@ -45,16 +46,70 @@ AI 可负责中文翻译、概念讲解、API 解释、toy example、测试设�
 | 阶段 | 主要资料 | 使用方式 | 核心目标 |
 |---|---|---|---|
 | Phase 0 | Diy-LLM Ch3 | 已完成部分作为查漏资料 | PyTorch 训练原语 |
-| Phase 1 | Diy-LLM Ch4、CS336 Basics 概念 | 中文解释 + 非作业 toy labs | Transformer forward |
-| Phase 2 | Diy-LLM Ch2–4、CS336 Assignment 1 | 自建 TinyLM；正式作业独立完成 | 最小训练闭环 |
-| Phase 3 | Diy-LLM Ch10、CS336 Lecture 10 | 推理概念与对照实验 | Prefill/Decode/KV Cache/指标 |
-| Phase 4 | zero-to-sglang Part I–II | 依章节逐步构建 Mini SGL | 请求、调度、缓存、服务 |
+| Phase 1 | Diy-LLM Ch4、CS336 Basics、算法库组件练习；C++ Foundation | 模型基础为主，少量 C++ 桥接 | Transformer forward、C0 工程准备 |
+| Phase 2 | Diy-LLM Ch2–4、CS336 Assignment 1；C++ Ch00–03 | 自建 TinyLM + C++ 基线/数据底座；正式作业独立完成 | 最小训练闭环、模型加载与 Tensor |
+| Phase 3 | Diy-LLM Ch10、CS336 Lecture 10；C++ Ch04–06 | PyTorch/C++ 小规模对照；算法库按需补充 | Prefill/Decode/KV Cache/指标、C1 |
+| Phase 4 | cpp-llm-engine Ch07–10、zero-to-sglang Part I–II | 复用 C++ 工程，Mini SGL 用于设计对照和差异实验 | 请求、调度、缓存、服务 |
 | Phase 5 | mini-sglang、zero-to-sglang Part III | 源码地图 + 可控实验 | 真实轻量框架 |
 | Phase 6 | 自建 portfolio project | 围绕一个系统问题做扩展 | AI Infra 求职项目 |
 | Phase 7 | 自建 rollout runtime | 推理服务连接环境/工具/trainer | RL 基础设施 |
 | Phase 8 | CS336 Assignment 5、Diy-LLM Ch13–14 | 正式作业独立完成 + 自建实验 | RLVR → Agentic RL |
 
-说明：Diy-LLM 当前把推理放在第 10 章、训练流程放在第 13 章、RLVR 放在第 14 章。zero-to-sglang 正在持续更新；进入 Phase 4/5 前重新核对完成状态。
+说明：Diy-LLM 章节映射沿用 2026-10-31 核对记录；进入对应阶段前复核。cpp-llm-engine 的章节与练习入口于 2026-11-13 核对；只使用当前阶段所需部分。llm-algo-leetcode 简称“算法库”，不是另一条必须完整打卡的课程。
+
+## 3.1 cpp-llm-engine 前置条件与分段准入
+
+这是个人能力验收，不是活动官方 Task 或报名要求。已知 Phase 0 基本完成；C++ 水平、WSL2/Linux、编译器和设备资源均尚未验收，不能由会写 Python 推定已具备。
+
+### 现在可以开始：准备，不必等待整个 Transformer 课程结束
+
+- 先继续 MHA → RoPE → layout，保持当前教学入口。
+- 并行检查基础 C++：函数、循环、引用/指针、`std::vector`、类、构造/析构、编译错误；缺哪项用小例子补哪项。
+- 工具链采用 WSL2 Ubuntu 或远程 Linux：C++17 编译器、CMake 3.20+、CTest、Git。GPU/CUDA 不是 CPU 准入条件。
+- 尚未选定模型前不承诺固定 RAM 下限。实际基线前检查磁盘、可用内存、权重大小、运行时开销与预期 KV；记录模型文件及版本。
+- 不需要提前学完 CUDA、Triton、高级模板、多 GPU、RL 或整套 C++ 教材。
+
+### C0：进入 Chapter00–03 工程实践的门槛
+
+- [ ] 能在 Linux/WSL2 中独立构建并运行 C++17 程序，查看编译/运行错误。
+- [ ] 能用 CMake 创建 library、可执行程序和测试 target，并运行 CTest；能定位一条故意失败的断言。
+- [ ] 能解释对象生命周期、RAII（资源获取即初始化）、移动与拷贝、owner 与 view 的区别；不会让 view 指向已经释放的存储。
+- [ ] 独立完成或用已有代码证明 FQ01（所有权）、FQ02（shape）、FQ04（构建测试）、FQ05（错误路径）对应能力。
+- [ ] 保存自己的实现、测试命令和错误定位记录；仅运行参考题库不计通过。
+
+C0 通过即可做 Ch00 基线与 Ch01–03 数据底座，不要求 Gate 1/2。FQ03/FQ08（view/Tensor）、FQ06（MatMul）、FQ12（workspace）和 FQ17（工程整合）随项目按需推进，不把所有 Foundation 练习堆成入门门槛。入口见 [Foundation 练习说明](https://github.com/datawhalechina/cpp-llm-engine/blob/main/exercises/foundation/README.md)。
+
+### 模型数学门槛：进入 Chapter04–06
+
+至少通过 C0 + Gate 1：能从 token id 追到 logits，理解 MHA/GQA 的头关系、RoPE 位置、causal mask、RMSNorm、SwiGLU 和残差。GQA 在 MHA 之后用小例子补齐。
+
+本计划默认先完成 Phase 2 的最小训练闭环，再在 Phase 3 系统推进 Decoder/Generation；完成模型组件后可以预读对应 C++ 实现。最小训练闭环是个人能力目标，不是运行预训练模型的技术依赖，更不要求先做完所有 CS336 正式作业。
+
+### C1：进入 Chapter07–10 runtime 的门槛
+
+- [ ] C0、Gate 1、Gate 2、Gate 3 已通过；单请求生成确实正确。
+- [ ] 固定模型、tokenizer、prompt、权重/dtype 与 greedy 配置；验证完整前向与缓存 decode 的 logits 容差、位置偏移和输出行为。
+- [ ] 能解释 Prefill→Decode、EOS/max tokens、请求终态与资源释放；覆盖单 token、不同前缀长度及异常输入。
+- [ ] 能核算每层 K/V 的 shape 与字节数，区分模型权重、工作区和请求状态。
+- [ ] 有真实基线的运行记录，能区分加载/预热/稳态，解释 TTFT、TPOT/ITL 和吞吐的计时口径。
+
+量化与不同执行后端允许数值容差，不把所有配置的文本逐字相等当成通用标准；先用小 shape/固定输入核对数值，再检查受控 greedy 序列。达不到 C1 就在当前执行链排错，不用更复杂的 scheduler 掩盖问题。
+
+### 时间与活动边界
+
+当前暂按 2/3 模型基础、1/3 C++ 桥接分配时间，比例随验收调整。一个学习单元约 60–90 分钟只是排期单位，不承诺固定天数掌握。连续两个单元卡在同一前置问题时，缩小到最小例子定位，再继续主线。
+
+组队打卡只能复用本计划的实现、测试与实验记录；参考工程运行、个人独立练习、原创系统改动分别标注。本期 Task0–6 与仓库 CPU 六任务的对应关系、助教 review 和结课要求尚未确认，不以活动两周期限代替阶段验收。
+
+### 路径与去重
+
+- `CS336_projects/cpp-inference-runtime/`：同一工程积累 bridge → execution → serving；不是每阶段重开一个引擎。
+- `CS336_projects/transformer-foundations/`、`tinylm/`：保留原 PyTorch 产物，可为小规模 C++ 数值对照提供参考。
+- `CS336_projects/inference-foundations/`：只保存跨实现对照、容量核算和实验记录，复用模型代码。
+- `CS336_projects/mini-sgl-labs/`：zero-to-sglang/mini-sglang 的源码地图、差异实验与缺失能力补充，不完整重写第二个同功能引擎。
+- `CS336_projects/inference-runtime/`：后期求职项目的实验与报告入口，复用 C++ 工程或真实框架，明确实际代码位置。
+
+以上是计划路径，按首次实践创建；不因更新文档而声称已有实现。上游教程代码保留来源、许可证、commit；个人练习与改动可辨识。正式作业不作为参考实现来源。
 
 ## 4. 贯穿式性能素养
 
@@ -170,6 +225,10 @@ x [B,T,C]
 
 ## 7. Phase 2 — TinyLM：Transformer 与最小训练闭环
 
+### C++ 衔接
+
+通过 C0 后可在本阶段推进 cpp-llm-engine Ch00–03：先建立外部真实推理基线，再追踪模型输入/权重，练习 Tensor view 与 CPU 算子。模型训练任务和 C++ 数据底座独立验收；不在此阶段展开多个模型、MoE、CUDA 或完整服务。保存基线配置、所有权示意、shape/stride/offset 检查和一个与 PyTorch 对照的 CPU 小算子。
+
 ### 目标
 
 把 Diy-LLM 与 CS336 Basics 的知识组合成可训练、可保存、可恢复、可生成的小语言模型，并提升 Python/PyTorch 工程能力。
@@ -249,15 +308,21 @@ Tokenizer / ids
 
 能说明为什么 Prefill 与 Decode 需要不同调度/优化，能计算 KV Cache 容量，并能避免把 tokens/s、TTFT 和 TPOT 混为一个指标。
 
-## 9. Phase 4 — zero-to-sglang：Build a Mini SGL
+### C++ 执行链与 C1
+
+通过模型数学门槛后，按 cpp-llm-engine Ch04–06 衔接 Decoder、量化 Linear 与生成。只选一个稠密模型；先理解小 shape 的浮点数学与参考路径，再理解量化表示和误差。学习量化服务于模型加载/内存/带宽，不另开全量量化格式研究。
+
+在 `cpp-inference-runtime/` 保存执行链与测试，在 `inference-foundations/` 保存对照报告。Gate 3 检查推理概念；C1 额外检查实际执行证据，两者都通过才能进入 Phase 4。详见第 3.1 节。
+
+## 9. Phase 4 — C++ Inference Runtime + Mini SGL 对照
 
 ### 目标
 
-从推理概念进入框架工程，按请求生命周期逐步增加组件。学习顺序以 zero-to-sglang Part II 为骨架，而不是按 kernel 类型组织。
+从推理概念进入框架工程，在 cpp-llm-engine Ch07–10 对应的同一工程中逐步增加缓存、调度、测量和服务。zero-to-sglang Part I–II 用于设计对照；算法库用于有明确问题的机制实验。入场要求 Gate 3 + C1，不按 kernel 类型组织任务。
 
 ### 项目路径
 
-`CS336_projects/mini-sgl-labs/`
+实现：`CS336_projects/cpp-inference-runtime/`；设计对照与差异实验：`CS336_projects/mini-sgl-labs/`。
 
 ### 顺序与产物
 
@@ -270,6 +335,8 @@ Tokenizer / ids
 7. **Radix/Prefix Cache**：共享前缀、引用/淘汰、命中率与正确性。
 8. **多进程与 Tensor Parallel**：先理解请求/控制流，再做服务器实验。
 9. **Speculative decoding**：作为可选扩展，关注框架协议与收益条件。
+
+前七项优先在已有 C++ 工程形成完整请求链。Prefix Cache 不必立即写成 Radix Tree，先验证共享、引用、淘汰和失效语义；Radix 的具体实现可以在 Phase 5 阅读和实验。多进程/TP 在这里完成请求流设计说明，真实多 GPU 运行留到 Phase 5。超出 C++ 教程当前能力的内容，通过独立小实验或真实框架补齐，不能仅凭章节标题标为已完成。
 
 ### 验收
 
@@ -286,7 +353,9 @@ Tokenizer / ids
 
 ## 10. Phase 5 — mini-sglang：真实轻量推理框架
 
-mini-sglang 当前是约 5K 行 Python 的紧凑框架，适合在自建 Mini SGL 后进行源码阅读与实验。它包含 API server、tokenizer/detokenizer、scheduler、engine、attention backend、KV cache、CUDA Graph、tensor parallel、Radix Cache、Chunked Prefill 和 Overlap Scheduling。
+完成 Phase 4 的 C++ runtime 后，以 mini-sglang 进行真实框架源码阅读与实验，不要求先完整重写 Python Mini SGL。阅读范围包括 API、scheduler、engine、backend、KV、CUDA Graph、TP、Radix Cache、Chunked Prefill 和 Overlap Scheduling；具体模块路径与功能在启动本阶段时按所选 commit 复核。
+
+源码地图和实验统一放在 `CS336_projects/mini-sgl-labs/`。每项能力记录它在 C++ 工程与真实框架中的不同约束，避免将 CPU 教学结果外推为 GPU 服务性能。
 
 ### 推荐源码阅读顺序
 
@@ -328,13 +397,19 @@ server / message
 
 ### 目标
 
-交付一个聚焦“框架问题”的求职级项目。默认选择在 Mini SGL 自建代码或 mini-sglang fork/实验层上完成，不重新造整个 vLLM/SGLang。
+交付一个聚焦“框架问题”的求职级项目。复用 `cpp-inference-runtime/` 或 mini-sglang fork/实验层，不重新造整个 vLLM/SGLang。`inference-runtime/` 作为统一实验/报告入口，README 指明实际实现和版本。
 
-### 推荐主项目：SLO-aware Serving Lab
+### 主项目选择：优先端侧约束，保留 serving 路线
 
 路径：`CS336_projects/inference-runtime/`
 
-核心范围：
+根据目前端侧兴趣，默认候选为 **Memory-Bounded Local Inference（内存受限的本地推理）**：在固定设备、模型、质量要求下，选择加载/工作区/KV 容量管理中的一个系统问题，比较首次响应、稳态 decode、峰值内存与失败回收。报告不同上下文长度下的容量和延迟取舍；先定位瓶颈再改实现，不要求全面手写 kernel。
+
+若选 CPU/桌面设备，只宣称该平台结果；移动端/NPU 是目标设备确定后的选做扩展，需要额外验证构建、后端、搬运与实际设备行为。功耗/温度只有真实测量后才进入结论。
+
+另一候选为 **SLO-aware Serving Lab**：选择 admission、缓存策略、长短请求隔离等一个明确问题。两个候选只做一个主项目，不额外叠加完整端侧和服务项目。两条路线均保留 Phase 4 的请求/缓存/取消/观测能力，便于进入 rollout。
+
+已有 runtime 的复用范围（按项目问题选择扩展，不要求重复实现）：
 
 - OpenAI-compatible 或清晰的生成接口；
 - request lifecycle 与状态机；
@@ -357,7 +432,11 @@ server / message
 7. 通过 baseline、优化版、ablation 和 profiler/trace 说明收益来源与失效区间。
 8. 简历只使用真实、可复现数据。
 
+CPU 项目记录 RSS/峰值工作区/KV 字节等实际内存指标；GPU 项目补显存指标，明确 allocator allocated/reserved 与进程内存的差别。模拟数据只能说明机制。上述验收通过记为 Gate 6。
+
 ## 12. Phase 7 — 面向 Agentic RL 的 Rollout Runtime
+
+入场：Gate 4、Gate 5、Gate 6 通过。优先以清晰推理服务接口连接已有 runtime；如需 logprob、模型版本或更新能力，先验证后端支持，不默认 C++ 教学引擎已具备 trainer 所需全部能力。
 
 ### 目标
 
@@ -434,6 +513,7 @@ Trajectory Store / Training Batch
 ### 本地
 
 - CPU、小 shape 和 deterministic correctness；
+- C++ 工程在 WSL2/Linux 完成，含 CMake/CTest、资源生命周期与必要的 sanitizer 检查；
 - PyTorch API toy examples；
 - scheduler/cache 状态机测试；
 - mock tool/environment；
@@ -456,6 +536,7 @@ Mini-SGLang 依赖 Linux/CUDA，Windows 原生环境不作为目标平台。
 ```text
 commit / config / command
 hardware / driver / CUDA / PyTorch / framework version
+CPU threads / compiler / build type / flags / CMake / OS (C++/CPU experiments)
 model / dtype / TP size / attention backend
 request arrival pattern / concurrency
 prompt length distribution / output length distribution
@@ -473,13 +554,15 @@ raw result path / analysis script / conclusion / limitation
 |---|---|---|
 | Phase 0 — PyTorch Training Bridge | ✅ 基本完成 | 仅按需回补 |
 | Phase 1 — Transformer Foundations | 🔓 进行中 | MHA → RoPE → tensor layout |
-| Phase 2 — TinyLM | ⬜ | Gate 1 后开始 |
-| Phase 3 — Inference Foundations | ⬜ | Gate 2 后开始 |
-| Phase 4 — Build a Mini SGL | ⬜ | Gate 3 后开始 |
+| Phase 2 — TinyLM | ⬜ | Gate 1 后开始；C++ Ch00–03 另按 C0 准入 |
+| Phase 3 — Inference Foundations | ⬜ | Gate 2 后开始；C++ 执行要求 C0，通过 C1 后升级 |
+| Phase 4 — C++ Inference Runtime + Mini SGL 对照 | ⬜ | Gate 3 + C1 后开始 |
 | Phase 5 — Read Mini-SGLang | ⬜ | Gate 4 后开始 |
 | Phase 6 — Inference Runtime Portfolio | ⬜ | Phase 5 中选题 |
-| Phase 7 — Rollout Runtime | ⬜ | Gate 5/项目基础完成后 |
+| Phase 7 — Rollout Runtime | ⬜ | Gate 4–6 后开始 |
 | Phase 8 — Alignment / RLVR / Agentic RL | ⬜ | Gate 7 后开始 |
+
+附加门槛状态：C0（C++ 工程）待验收，C1（C++ 执行链）未开始。Phase 1–2 中的桥接不代表阶段整体完成。每个 Gate 只在自己的代码/阅读实验、测试或基线对照、中文记录和局限说明齐全后通过。
 
 ## 17. 当前立即执行的学习单元
 
@@ -497,6 +580,8 @@ Multi-Head Attention 直觉与 shape
 
 本单元结束后再进入 RMSNorm、SwiGLU 和完整 Transformer block，不插入 Triton kernel 支线。
 
+并行 C++ 准备的最短顺序：环境盘点 → 所有权/构建/shape/错误路径练习 → C0 review → Ch00 基线 → view/CPU 算子。基础熟悉的题用已有证据验收，避免重复刷题。当前优先产物是 MHA/RoPE/layout 的个人实现与测试、C++ 工程入门证据；不以本期结束前完成全部引擎为硬目标。
+
 ## 18. 资料核对
 
 - [Stanford CS336 Spring 2026](https://cs336.stanford.edu/)：Lecture 10 为 Inference；Assignment 1 是 Basics；Assignment 2 是 Systems；Assignment 5 是 Alignment and Reasoning RL。
@@ -504,4 +589,14 @@ Multi-Head Attention 直觉与 shape
 - [zero-to-sglang](https://github.com/datawhalechina/zero-to-sglang)：Part I 推理基础，Part II 构建 Mini SGL，Part III 真实 SGLang 高级技术，Part IV profiling/PR。
 - [mini-sglang](https://github.com/sgl-project/mini-sglang)：真实轻量框架，覆盖 Radix Cache、Chunked Prefill、Overlap Scheduling、TP 和 attention backends。
 
-最后核对日期：2026-10-31。
+上述课程结构沿用 2026-10-31 核对记录，执行对应阶段前重新核对。
+
+2026-11-13 新增核对（文档及部分源码抽查，未执行完整测试）：
+
+- [cpp-llm-engine USAGE](https://github.com/datawhalechina/cpp-llm-engine/blob/main/USAGE.md)：章节、工具链与运行入口。
+- [CPU 六任务计划](https://github.com/datawhalechina/cpp-llm-engine/blob/main/source/guides/cpu_learning_plan.md)：阶段产物与验证记录；不直接视为本期活动任务表。
+- [Foundation](https://github.com/datawhalechina/cpp-llm-engine/blob/main/exercises/foundation/README.md)：starter 与参考回归的区别。
+- [llm-algo-leetcode 推理路线](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/topic_discussion/inference_optimization/intro.md)：按问题选读。
+- [推理对比实验](https://github.com/datawhalechina/llm-algo-leetcode/blob/main/docs/02_PyTorch_Algorithms/66_Inference_Performance_Comparison.md)：机制模拟和真实后端实验分别记录。
+
+实际开始实验时固定 upstream commit，记录资料版本。教程测试只是最低参考；个人测试还需覆盖数值、causal mask、增量生成、资源生命周期和异常路径。未测量的速度、容量或质量收益不得写成结论。
