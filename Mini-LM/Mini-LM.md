@@ -2,6 +2,10 @@
 
 > 版本：2026-11-13。Phase 0 已基本完成；当前从 Phase 1 的 Multi-Head Attention、RoPE 和 tensor layout 继续。纳入 cpp-llm-engine 工程实践，不改变学习者先实现、AI review 的教学协议。
 
+仓库入口：[README](../README.md)。学习记录：[P0 笔记](P0/before_P0.md)、[P1 笔记](P1/before_P1.md)、[拼装指南](P1/03_assembly/assembly_lab.md)。
+
+路径说明：P0/P1 已整理到本目录；下文尚未创建的项目路径仍是规划。`CS336_projects/` 等四个课程目录仅在本地保留，不上传 GitHub，后续公开项目需放在忽略目录之外。
+
 ## 1. 最终目标
 
 建立一条从模型原理到推理系统、再到 Agentic RL 基础设施的完整能力链：
@@ -104,7 +108,7 @@ C0 通过即可做 Ch00 基线与 Ch01–03 数据底座，不要求 Gate 1/2。
 ### 路径与去重
 
 - `CS336_projects/cpp-inference-runtime/`：同一工程积累 bridge → execution → serving；不是每阶段重开一个引擎。
-- `CS336_projects/transformer-foundations/`、`tinylm/`：保留原 PyTorch 产物，可为小规模 C++ 数值对照提供参考。
+- [Mini-LM/P1](P1/) 保存现有 Transformer 产物；`CS336_projects/tinylm/` 是本地规划位置：保留原 PyTorch 产物，可为小规模 C++ 数值对照提供参考。
 - `CS336_projects/inference-foundations/`：只保存跨实现对照、容量核算和实验记录，复用模型代码。
 - `CS336_projects/mini-sgl-labs/`：zero-to-sglang/mini-sglang 的源码地图、差异实验与缺失能力补充，不完整重写第二个同功能引擎。
 - `CS336_projects/inference-runtime/`：后期求职项目的实验与报告入口，复用 C++ 工程或真实框架，明确实际代码位置。
@@ -205,7 +209,7 @@ x [B,T,C]
 
 ### 产物
 
-路径：`CS336_projects/transformer-foundations/`
+路径：[Mini-LM/P1](P1/)，按 [01_components](P1/01_components/)、[02_block](P1/02_block/)、[03_assembly](P1/03_assembly/) 组织。
 
 - MHA + RoPE toy labs；
 - tensor layout 实验记录；

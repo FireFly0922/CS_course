@@ -70,7 +70,9 @@ class CausalSelfAttention(nn.Module):
         self.num_heads = config.num_heads
         self.head_dim = config.head_dim
         self.max_seq_len = config.max_seq_len
+        self.rope_base = config.rope_base
         self.dropout_p = float(dropout_p)
+        self.config = config
         # TODO B1：创建 q_proj、k_proj、v_proj、out_proj（C→C，无 bias）。
         # 创建 self.rope，使用已有 RotaryEmbedding 类，不重写旋转算法。
         # 导入前先完成指南中的 TODO 0，避免其演示代码在 import 时执行。
@@ -116,7 +118,7 @@ class CausalSelfAttention(nn.Module):
         k = self.split_heads(self.k_proj(x))
         v = self.split_heads(self.v_proj(x))
         q,k = self.rope(q, k, start_pos=start_pos)
-        atten_dropout = self.dropout_p
+        atten_dropout = self.dropout_p if self.training else 0.0
         head_output = F.scaled_dot_product_attention(query=q,key=k,value=v,dropout_p=atten_dropout,is_causal=True)
         output = self.merge_heads(head_output)
         output = self.out_proj(output)
@@ -126,8 +128,10 @@ def build_block(config: ModelConfig) -> TransformerBlock:
     # TODO C：创建一个 CausalSelfAttention 实例和一个 SwiGLU 实例，
     # 注入你已经完成的 TransformerBlock，传入 embed_dim/norm_eps。
     # 返回实例。每次调用必须创建独立的子模块，不能共享上一层参数。
-    raise NotImplementedError("TODO C: inject attention and FFN into block")
-
+    atten = CausalSelfAttention(config=config,dropout_p=0.0)
+    ffn = SwiGLU(config=config)
+    block = TransformerBlock(embed_dim=config.embed_dim, attention=atten, ffn=ffn, norm_eps=config.norm_eps)
+    return block
 
 class TinyDecoderLM(nn.Module):
     def __init__(self, config: ModelConfig):
@@ -138,7 +142,14 @@ class TinyDecoderLM(nn.Module):
         # final_norm：nn.RMSNorm(C, eps=...)；lm_head：Linear(C,V,bias=False)。
         # 通过 build_block(config) 创建每层，不使用 [同一个block] * N。
         # 最后让 lm_head.weight 与 token_embedding.weight 共享同一 Parameter。
-        raise NotImplementedError("TODO D1: register the complete LM")
+        self.token_embedding = nn.Embedding(num_embeddings=config.vocab_size, embedding_dim=config.embed_dim)
+        self.blocks = nn.ModuleList([
+            build_block(config=config)
+            for _ in range(config.num_layers) 
+            ])
+        self.final_norm = nn.RMSNorm(normalized_shape=config.embed_dim, eps=config.norm_eps)
+        self.lm_head = nn.Linear(in_features=config.embed_dim, out_features=config.vocab_size, bias=False)
+        self.lm_head.weight = self.token_embedding.weight
 
     def forward(
         self, input_ids: torch.Tensor, targets: torch.Tensor | None = None,
@@ -157,16 +168,26 @@ class TinyDecoderLM(nn.Module):
         # TODO D3：targets=None 时返回 (logits, None)；否则展平后计算 CE。
         # targets 已由数据端错开一位，这里不能再次 shift。
         # 使用 ignore_index=-100。loss 为 scalar Tensor，不能提前 .item()。
-        raise NotImplementedError("TODO D2/D3: forward and optional loss")
-
+        x = self.token_embedding(input_ids)
+        for block in self.blocks:
+            x = block(x, start_pos = 0)
+        x = self.final_norm(x)
+        logits = self.lm_head(x)
+        if targets is None:
+            return logits, None
+        flat_logits = logits.reshape(-1, self.config.vocab_size)
+        flat_targets = targets.reshape(-1)
+        loss = F.cross_entropy(input=flat_logits, target=flat_targets, ignore_index=-100)
+        return logits, loss
 
 def make_batch(tokens: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """输入 long [B,T+1]，返回同 device 的 input_ids/targets，各为 [B,T]。"""
     if tokens.ndim != 2 or tokens.dtype != torch.long or tokens.size(1) < 2:
         raise ValueError("tokens must be long [B,T+1] with at least two positions")
     # TODO E：前后错开一位。切片可共享存储且不一定连续，后续用 reshape。
-    raise NotImplementedError("TODO E: construct shifted input and target")
-
+    without_last = tokens[:, :-1]
+    without_first = tokens[:, 1:]
+    return without_last, without_first
 
 def train_step(
     model: TinyDecoderLM,
@@ -179,4 +200,22 @@ def train_step(
     # clip_grad_norm_ 使用 max_norm=1.0 / error_if_nonfinite=True。
     # 返回 {"loss": Python float, "grad_norm": Python float}。
     # loss 是本次更新前的 loss，grad_norm 是裁剪前的总范数。
-    raise NotImplementedError("TODO F: connect one optimizer step")
+    
+    # 训练
+    model.train()
+    optimizer.zero_grad(set_to_none=True)
+    _, loss = model(input_ids, targets)
+    if loss is None:
+        raise RuntimeError("model must return a loss when targets are provided")
+    
+    # 反向传播
+    loss.backward()
+    grad_norm = nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
+
+    # 更新参数
+    optimizer.step()
+
+    return {
+        "loss": loss.item(),
+        "grad_norm": grad_norm.item(),
+    }

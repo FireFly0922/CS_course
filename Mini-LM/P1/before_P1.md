@@ -27,7 +27,7 @@ Attention is all you need !
 
 embedding的本质是用一个token ID，从可训练矩阵中取出对应的一行，这个可训练矩阵的`shape=[V,d]`,每一行表示一个token,列表示embedding dimension\
 embedding查表时通过检索对应token ID的`embedding_matrix[token_id]`\
-在真实处理时，一段长度为 $T$ 的文本先被转换成一维tensor $token\_ids = [x_1,x_2,…,x_T]$，其中 $x_t$ 表示第 $t$ 个位置的token ID；embedding查表就是取出`embedding_matrix[x_t]`
+在真实处理时，一段长度为 $`T`$ 的文本先被转换成一维tensor $`token\_ids = [x_1,x_2,…,x_T]`$，其中 $`x_t`$ 表示第 $`t`$ 个位置的token ID；embedding查表就是取出`embedding_matrix[x_t]`
 
 常用api
 
@@ -104,8 +104,8 @@ print("输出层的梯度:")
 print(lm_head.weight.grad)
 ```
 
-在真实LLM中,不使用上面的$h=E[x], z=hW$,而是得到embedding后经过多层transformer\
-实现了一个简单的embedding,在`AI_Labs\P1\embedding_Labs.py`
+在真实LLM中,不使用上面的$`h=E[x], z=hW`$,而是得到embedding后经过多层transformer\
+实现了一个简单的embedding,在[embedding_Labs.py](01_components/embedding_Labs.py)
 
 ## position
 
@@ -117,7 +117,7 @@ embedding只解决了让文字能被模型认识，对应到token，但是没有
 
 专门为position创建一个embedding :\
 token embedding的shape=[V,C] ; position embedding的shape=[max_seq_len,C]\
-对位置t : $x[b,t] = token\_embedding[token\_id] + position\_embedding[t]$
+对位置t : $`x[b,t] = token\_embedding[token\_id] + position\_embedding[t]`$
 
 ```python
 class TokenPositionEmbedding(nn.Module):
@@ -173,8 +173,20 @@ class TokenPositionEmbedding(nn.Module):
 
 ### 正余弦位置编码
 
-$$PE(pos,2i)=\sin\left(\frac{pos}{10000^{2i/C}}\right)$$
-$$PE(pos,2i+1)=\cos\left(\frac{pos}{10000^{2i/C}}\right)$$
+
+
+```math
+PE(pos,2i)=\sin\left(\frac{pos}{10000^{2i/C}}\right)
+```
+
+
+
+
+```math
+PE(pos,2i+1)=\cos\left(\frac{pos}{10000^{2i/C}}\right)
+```
+
+
 也就是不学习位置矩阵 : pos表示token位置 ; i表示维度对的编号
 
 ```python
@@ -233,40 +245,68 @@ class SinusoidalPositionEncoding(nn.Module):
 ### Attention 公式的理解
 
 对一个token,在key、Value、Query三个维度有不同的映射，"映射"这一过程，是通过训练三个矩阵得到的
-$$\text{Attention}(Q,K,V) = \text{softmax} ( \frac{QK^{\top}}{\sqrt{d_k}} + M )V$$
 
-- $q_i^{\top}k_j$
 
-通过点积计算两向量的匹配度$$q_i^{\top}k_j = \sum_{r=1}^{d_k} q_{ir} k_{jr}$$
+```math
+\text{Attention}(Q,K,V) = \text{softmax} ( \frac{QK^{\top}}{\sqrt{d_k}} + M )V
+```
+
+
+
+- $`q_i^{\top}k_j`$
+
+通过点积计算两向量的匹配度
+
+```math
+q_i^{\top}k_j = \sum_{r=1}^{d_k} q_{ir} k_{jr}
+```
+
+
 也就是说每个q都要和所有k比较，从而计算出第i个token认为第j个token有多相关
 
-- 为什么缩放系数和$d_k$有关
+- 为什么缩放系数和$`d_k`$有关
 
-在计算$QK^{\top}$时，$
+在计算$`QK^{\top}`$时，
+
+```math
 Q=\begin{bmatrix}
 q_{11} & q_{12} & q_{13}\\
 q_{21} & q_{22} & q_{23} 
-\end{bmatrix}$, $
+\end{bmatrix}
+```
+
+, 
+
+```math
 K^\mathsf T=
 \begin{bmatrix}
 k_{11} & k_{21}\\
 k_{12} & k_{22}\\
 k_{13} & k_{23}
-\end{bmatrix}$
+\end{bmatrix}
+```
 
-$QK^\mathsf T=
+
+
+
+
+```math
+QK^\mathsf T=
 \begin{bmatrix}
 q_{11}k_{11}+q_{12}k_{12}+q_{13}k_{13} & q_{11}k_{21}+q_{12}k_{22}+q_{13}k_{23}
 \\
 q_{21}k_{11}+q_{22}k_{12}+q_{23}k_{13} & q_{21}k_{21}+q_{22}k_{22}+q_{23}k_{23}
-\end{bmatrix}$
+\end{bmatrix}
+```
 
-随着d增大, $QK^{\top}$矩阵中每一元素也会增大，也就是说缩放系数和d有关(这里的d指KQV的列数)
 
-- 为什么除以的是$\sqrt{d_k}$, 而不是$d_k$
+
+随着d增大, $`QK^{\top}`$矩阵中每一元素也会增大，也就是说缩放系数和d有关(这里的d指KQV的列数)
+
+- 为什么除以的是$`\sqrt{d_k}`$, 而不是$`d_k`$
 
 我们的目标是让Attention logits中的典型数值范围保持基本不变\
-$QK^{\top}$矩阵的方差随$d_k$线性增长，所以实际数值尺度(标准差)与$\sqrt{d_k}$成正比
+$`QK^{\top}`$矩阵的方差随$`d_k`$线性增长，所以实际数值尺度(标准差)与$`\sqrt{d_k}`$成正比
 
 ### 完整单头缩放点积注意力的组成
 
@@ -299,7 +339,7 @@ class SingleHeadCausalAttention(nn.Module):
 
 `torch.ones(T,T,device=x.device,dtype=torch.bool)`先创建一个全为1,shape=[T,T]的，并将其中的1转换成bool格式\
 `mask = torch.tril(…)`取下三角矩阵置1，其他部分置0，也就是False\
-`scores = scores.masked_fill(~mask, float("-inf"))`先对mask取反，因为masked_fill填充的是True的部分，将上三角区域填充为`-inf`，这是因为softmax计算时会对元素取e的指数，$e^{-inf}$可以得到0\
+`scores = scores.masked_fill(~mask, float("-inf"))`先对mask取反，因为masked_fill填充的是True的部分，将上三角区域填充为`-inf`，这是因为softmax计算时会对元素取e的指数，$`e^{-inf}`$可以得到0\
 这样实现了求第a个token的Attention时只能看到前a个token，防止提前看到正确答案
 
 项目中一般使用pytorch中已有的Attention的API`torch.nn.functional.scaled_dot_product_attention`
@@ -323,10 +363,10 @@ torch.nn.functional.scaled_dot_product_attention(
 
 多头注意力(简称MHA)将隐藏维度切成多个子空间，可以理解为从多个角度学习问题\
 将[B, T, C]reshape成[B, T, H, D]，SDPA(缩放点积注意力)希望接收[B, H, T, D], 需要transpose\
-便于理解的完整MHA(Multi-Head Attention)实现在`AI_Labs\P1\MHA.py`\
+便于理解的完整MHA(Multi-Head Attention)实现在[MHA.py](01_components/MHA.py)\
 另外，一般定义split_heads和merge_heads, 定义merge_heads时需要contiguous将内存连续, 输出时需要merge_heads
 
-这里只展示封装最完善的`nn.MultiheadAttention`版本实现，另外两种自定义性较强的版本在`AI_Labs\P1\MHA.py`\
+这里只展示封装最完善的`nn.MultiheadAttention`版本实现，另外两种自定义性较强的版本在[MHA.py](01_components/MHA.py)\
 这种写法是最方便的，但是可能不太方便自定义 RoPE、KV Cache、GQA 等
 
 ```python
@@ -370,27 +410,45 @@ print("weights:", weights.shape)
 
 之前学过绝对位置编码，RoPE也是一种让Attention理解词语"位置"的方法\
 先进行数学推导：\
-$R$指对某位置token的旋转矩阵
-$$q_m' = R_m q_m ; k_n' = R_n k_n$$
-$$(q_m')^{\top} k_n' = q_m^{\top} R_m^{\top} R_n k_n = q_m^{\top} R_{n-m} k_n$$
-旋转并不会改变向量的模长。上式说明Attention点积中的位置旋转项只与$n-m$这一相对距离有关；完整点积仍然同时依赖$q_m$和$k_n$的内容\
-实现的RoPE在`AI_Labs\P1\RotaryEmbedding.py`，后面学习完这些概念后会实现一个完整的Transformer
+$`R`$指对某位置token的旋转矩阵
+
+
+```math
+q_m' = R_m q_m ; k_n' = R_n k_n
+```
+
+
+
+
+```math
+(q_m')^{\top} k_n' = q_m^{\top} R_m^{\top} R_n k_n = q_m^{\top} R_{n-m} k_n
+```
+
+
+旋转并不会改变向量的模长。上式说明Attention点积中的位置旋转项只与$`n-m`$这一相对距离有关；完整点积仍然同时依赖$`q_m`$和$`k_n`$的内容\
+实现的RoPE在[RotaryEmbedding.py](02_block/RotaryEmbedding.py)，后面学习完这些概念后会实现一个完整的Transformer
 
 ## Transformer的其它组件与连接方式
 
 ### LayerNorm
 
 对Transformer输入`[B,T,C]`中的每个token，沿最后一个隐藏维度`C`独立归一化，用于稳定训练过程
-$$\text{LayerNorm}(v) = \gamma \frac{v-\mu}{\sigma} + \beta$$
-这里计算均值和标准差是对同一层的所有神经元进行计算，另外计算标准差时$\sigma = \sqrt{\frac{1}{d} \sum_{i=1}^d(v_i - \mu)^2 + \epsilon}$中的$\epsilon$是一个极小量防止计算归一化公式时出现0
 
-这里$\gamma$和$\beta$是可学习参数
+
+```math
+\text{LayerNorm}(v) = \gamma \frac{v-\mu}{\sigma} + \beta
+```
+
+
+这里计算均值和标准差是对同一层的所有神经元进行计算，另外计算标准差时$`\sigma = \sqrt{\frac{1}{d} \sum_{i=1}^d(v_i - \mu)^2 + \epsilon}`$中的$`\epsilon`$是一个极小量防止计算归一化公式时出现0
+
+这里$`\gamma`$和$`\beta`$是可学习参数
 
 ### 残差连接
 
-这种方法可以让信息跳过某些层传递。残差分支学习$y = F(x) + x$；即使$F$暂时学不到有效变换，模型仍然可以通过$x$保留恒等映射。
+这种方法可以让信息跳过某些层传递。残差分支学习$`y = F(x) + x`$；即使$`F`$暂时学不到有效变换，模型仍然可以通过$`x`$保留恒等映射。
 
-现代LLM常用$x_{new} = x + F(Norm(x))$的`Pre-Norm`形式残差路径。若$y=x+F(x)$，则$\frac{\partial\mathcal L}{\partial x}=\frac{\partial\mathcal L}{\partial y}\left(I+\frac{\partial F(x)}{\partial x}\right)$，其中$I$提供直接的梯度通路
+现代LLM常用$`x_{new} = x + F(Norm(x))`$的`Pre-Norm`形式残差路径。若$`y=x+F(x)`$，则$`\frac{\partial\mathcal L}{\partial x}=\frac{\partial\mathcal L}{\partial y}\left(I+\frac{\partial F(x)}{\partial x}\right)`$，其中$`I`$提供直接的梯度通路
 
 ```python
 class TransformerBlock(nn.Module):
@@ -435,11 +493,35 @@ class TransformerBlock(nn.Module):
 ### RMSNorm
 
 对输入的[B, T, C]的最后一维C进行独立的归一化
-$$\operatorname{RMS}(x) = \sqrt{\frac{1}{C}\sum_{i=1}^{C}x_i^2+\epsilon}$$
-$$\operatorname{RMSNorm}(x) = \gamma\odot\frac{x}{\operatorname{RMS}(x)}$$
 
-在写代码时，一般使用的$$\operatorname{normalized}(x_i) = x_i\cdot\frac{1}{\sqrt{\frac{1}{d}\sum_{j=1}^{d}x_j^2+\epsilon}}$$
-完整RMSNorm$$\operatorname{RMSNorm}(x) = \gamma\odot\frac{x}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon}}$$
+
+```math
+\mathrm{RMS}(x) = \sqrt{\frac{1}{C}\sum_{i=1}^{C}x_i^2+\epsilon}
+```
+
+
+
+
+```math
+\mathrm{RMSNorm}(x) = \gamma\odot\frac{x}{\mathrm{RMS}(x)}
+```
+
+
+
+在写代码时，一般使用的
+
+```math
+\mathrm{normalized}(x_i) = x_i\cdot\frac{1}{\sqrt{\frac{1}{d}\sum_{j=1}^{d}x_j^2+\epsilon}}
+```
+
+
+完整RMSNorm
+
+```math
+\mathrm{RMSNorm}(x) = \gamma\odot\frac{x}{\sqrt{\frac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon}}
+```
+
+
 
 手写版本的RMSNorm
 
@@ -484,7 +566,13 @@ y = norm(x)
 ### FFN层
 
 在transformer中，FFN(前馈网络)负责对每个token内部特征进行非线性加工, 其在transformer block中一般先让Attention混合不同token, 之后将混合了不同token的结果交给FFN层\
-经典的Transformer FFN公式$$\text{FFN}(x) = \text{ReLU}(x W_1^{\top} + b_1) W_2^{\top} + b_2$$
+经典的Transformer FFN公式
+
+```math
+\text{FFN}(x) = \text{ReLU}(x W_1^{\top} + b_1) W_2^{\top} + b_2
+```
+
+
 这里还需要了解上投影(通过线性层让维数从`C`变为更大的`F`, eg:[B,T,C]→[B,T,F])和下投影(从`F`恢复为`C`, [B,T,F]→[B,T,C])，下面展示一个典型的FFN
 
 ```python
@@ -511,7 +599,7 @@ class FeedForward(nn.Module):
 
 ### SiLU/Swish
 
-定义$\text{SiLU}(x) = x \sigma(x)$，这里的$\sigma$是sigmoid而不是softmax，即$\sigma(x) = \frac{1}{1+e^{-x}}$；在`torch.nn.functional`中调用`F.silu(x)`等同于`x * torch.sigmoid(x)`
+定义$`\text{SiLU}(x) = x \sigma(x)`$，这里的$`\sigma`$是sigmoid而不是softmax，即$`\sigma(x) = \frac{1}{1+e^{-x}}`$；在`torch.nn.functional`中调用`F.silu(x)`等同于`x * torch.sigmoid(x)`
 
 ### SwiGLU
 
@@ -546,7 +634,7 @@ class SwiGLU(nn.Module):
         return output
 ```
 
-在数学上$\left[\operatorname{SiLU}(xW_g^\mathsf T) \odot (xW_u^\mathsf T)\right]W_d^\mathsf T$, 可以拆开来看 : 门控信号$x W_g^{\top}$对当前token生成一组调制值 ; 另外的Value分支$x W_u^{\top}$负责产生候选内容，可以理解为对某个中间维度j, Value分支决定提供特征内容, gate分支决定如何修改这个feature
+在数学上$`\left[\mathrm{SiLU}(xW_g^\mathsf T) \odot (xW_u^\mathsf T)\right]W_d^\mathsf T`$, 可以拆开来看 : 门控信号$`x W_g^{\top}`$对当前token生成一组调制值 ; 另外的Value分支$`x W_u^{\top}`$负责产生候选内容，可以理解为对某个中间维度j, Value分支决定提供特征内容, gate分支决定如何修改这个feature
 
 ## 完整Decoder-only Transformer前向
 
@@ -571,7 +659,7 @@ token_ids [B,T] → token embedding → [B, T, C] → n个transformer block → 
 ### LM Head(Language Modeling Head语言输出头)
 
 经过了Transformer block后,由于LLM最终的问题是“预测下一个token”, 需要对当前的[B, T, C]进行一些处理\
-LM Head其实只是一个线性层$\text{logits}_{b,t,:} = x_{b,t} W^{\top}$，其中$W$的shape为[V,C]，输出logits的shape为[B,T,V]。$\text{logits}_{b,t,v}$可以理解为当前隐藏状态和词表中第$v$个输出向量的点积，点积越大，模型越倾向于预测该token。logits是未归一化分数，训练时直接传给Cross-Entropy，不要提前softmax。
+LM Head其实只是一个线性层$`\text{logits}_{b,t,:} = x_{b,t} W^{\top}`$，其中$`W`$的shape为[V,C]，输出logits的shape为[B,T,V]。$`\text{logits}_{b,t,v}`$可以理解为当前隐藏状态和词表中第$`v`$个输出向量的点积，点积越大，模型越倾向于预测该token。logits是未归一化分数，训练时直接传给Cross-Entropy，不要提前softmax。
 
 Embedding权重和LM Head权重的shape都是[V,C]，可以通过`lm_head.weight = token_embedding.weight`进行weight tying，从而减少参数量。
 
@@ -595,6 +683,6 @@ loss = F.cross_entropy(
 
 ## start Tiny_transformer
 
-至此，我们可以开始进行`Tiny_transformer`的内容了，其实就是将前面学习过的"块"拼起来，由于不熟悉结构，可能直接从零开始写有点困难, 可以参考`AI_Labs\P1\Tiny_transformer_start.py`中的接口，手动实现一遍细节
+至此，我们可以开始进行`Tiny_transformer`的内容了，其实就是将前面学习过的"块"拼起来，由于不熟悉结构，可能直接从零开始写有点困难, 可以参考[before_Tiny_transformer.py](02_block/before_Tiny_transformer.py)中的接口，手动实现一遍细节
 
-完整的`Tiny_transformer`实现在`AI_Labs\P1\Tiny_transformer.py`
+完整的`Tiny_transformer`实现在[Tiny_transformer.py](02_block/Tiny_transformer.py)

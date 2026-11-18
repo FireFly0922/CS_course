@@ -38,7 +38,7 @@ PyTorch 基础
 - Phase 1 已完成 Embedding、位置编码概览和单头 Scaled Dot-Product Attention。
 - 下一节必须从 Multi-Head Attention、RoPE 和 tensor layout 开始。
 - 只有在前置知识确实造成阻塞时才回补；回补应使用最小 toy example，不得无限扩展课程范围。
-- 2026-11-13 纳入 cpp-llm-engine：Foundation/环境可并行准备，模型执行与 runtime 按 `AI_Labs/AI_Labs.md` 的 C0/C1 和阶段门槛推进。C++ 熟练度与环境尚未验收，不默认已掌握。`llm-algo-leetcode` 按需选读；不再要求重复完整实现 Python Mini SGL。
+- 2026-11-13 纳入 cpp-llm-engine：Foundation/环境可并行准备，模型执行与 runtime 按 [Mini-LM/Mini-LM.md](Mini-LM/Mini-LM.md) 的 C0/C1 和阶段门槛推进。C++ 熟练度与环境尚未验收，不默认已掌握。`llm-algo-leetcode` 按需选读；不再要求重复完整实现 Python Mini SGL。
 
 ## 4. 教学协议
 
@@ -77,7 +77,7 @@ PyTorch 基础
 
 ### 仓库内自建实验与项目
 
-路径主要为 `AI_Labs/`、`CS336_projects/` 及以后新增的非正式作业目录。
+路径主要为 `Mini-LM/`、`CS336_projects/` 及以后新增的非正式作业目录。
 
 - 可创建教学用 toy example、测试脚手架、benchmark harness、文档和非作业项目代码。
 - 学习关键实现仍应保留“学习者先写、AI review”的环节；若用户明确要求 AI 实现普通项目功能，可以执行，但必须解释关键设计并保留测试。
@@ -170,7 +170,7 @@ Kernel / CUDA / Triton 是“框架工程师必备的性能素养”，不是学
 
 ## 11. 计划维护
 
-- 总路线以根目录 `README.md` 为入口，以 `AI_Labs/AI_Labs.md` 为详细执行计划，以 `CS336_projects/README.md` 为项目交付清单。
+- 总路线以根目录 `README.md` 为入口，以 [Mini-LM/Mini-LM.md](Mini-LM/Mini-LM.md) 为详细执行计划，以 `CS336_projects/README.md` 为项目交付清单。
 - 更新计划时同步维护这三个文件的阶段名称、当前状态和项目路径，避免出现相互矛盾的路线。
 - 外部课程或项目会变化。引用章节结构、完成状态或框架特性前，应优先核对官方页面/官方仓库，并在文档中标注核对日期。
 - 不得修改或“统一”CS336 作业子目录的 `AGENTS.md`；它们应保持独立且更严格。

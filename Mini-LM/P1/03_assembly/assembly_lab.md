@@ -2,17 +2,21 @@
 
 本练习位于 Transformer Foundations 到最小训练闭环的衔接处。重点是模块组合、参数注册、shape 和数据/标签流；已有旋转算法与残差实现可以复用，不涉及正式 CS336 作业。
 
-状态：已提供学习用 TODO 和接口约定。先独立完成 assembly_lab.py，再提交代码 review；当前不安排独立测试脚本，尚未完成验收。
+状态：已提供学习用 TODO 和接口约定。先独立完成 [assembly_lab.py](assembly_lab.py)，再提交代码 review；当前不安排独立测试脚本，尚未完成验收。
 
 ## 从哪个文件开始
 
-- 在 `assembly_lab.py` 填写 TODO A—F；每个 TODO 完成后删除对应的占位异常。
-- `Tiny_transformer.py` 中你已完成的 `TransformerBlock` 被直接导入，不必再抄写一遍。
-- `Tiny_transformer_start.py` 是旧的 Block 模板，本练习不使用它。
+- 在 [assembly_lab.py](assembly_lab.py) 填写 TODO A—F；每个 TODO 完成后删除对应的占位异常。
+- [Tiny_transformer.py](../02_block/Tiny_transformer.py) 中你已完成的 `TransformerBlock` 被直接导入，不必再抄写一遍。
+- [before_Tiny_transformer.py](../02_block/before_Tiny_transformer.py) 是旧的 Block 模板，本练习不使用它。
 
-TODO 0：将 `RotaryEmbedding.py` 底部从 `torch.manual_seed(42)` 开始的演示移到 `if __name__ == "__main__":` 内并缩进。否则导入这个类会执行演示、打印输出并重置全局随机种子。类定义保持在外面。这是你需要完成的一项工程练习。
+TODO 0：将 [RotaryEmbedding.py](../02_block/RotaryEmbedding.py) 底部从 `torch.manual_seed(42)` 开始的演示移到 `if __name__ == "__main__":` 内并缩进。否则导入这个类会执行演示、打印输出并重置全局随机种子。类定义保持在外面。这是你需要完成的一项工程练习。
 
 TODO 0 只处理模块导入时的副作用，不要求编写或运行冒烟测试脚本。
+
+复习时使用 [before_assembly_lab.py](before_assembly_lab.py)；该文件只保留接口、TODO 和提示。相关概念见 [P1 笔记](../before_P1.md)。
+
+目录已分层；Python 的导入语句需与运行入口或包结构配套，Markdown 链接可跳转并不代表跨目录导入已配置。
 
 ## 谁创建谁
 
@@ -52,7 +56,7 @@ TODO 0 只处理模块导入时的副作用，不要求编写或运行冒烟测�
 ## 按顺序完成
 
 1. A：连接三条 FFN 投影。检查逐 token 独立性。
-2. B：借用 MHA.py 的投影/拆头/合头知识，在计算注意力之前连接已有 RoPE，并统一为 Tensor 返回值。旧 MHA 的二元组不能直接加到 residual 上。
+2. B：借用 [MHA.py](../01_components/MHA.py) 的投影/拆头/合头知识，在计算注意力之前连接已有 RoPE，并统一为 Tensor 返回值。旧 MHA 的二元组不能直接加到 residual 上。
 3. C：把 A/B 的实例传给已完成的 TransformerBlock。这里练习的是对象组合，不重写残差算法。
 4. D：通过 ModuleList 堆叠独立 Block，连接 Embedding、Final RMSNorm、LM Head；实现有无 targets 两种返回。
 5. E：从一条序列构造输入与下一 token 标签；只在这一处 shift。

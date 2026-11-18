@@ -5,3 +5,9 @@ __pycache__/
 
 # Claude Code local settings
 .claude/
+
+# Local course materials and course project archives (keep on disk)
+/cs224n-spring2024/
+/CS224N_projects/
+/cs336-2026/
+/CS336_projects/

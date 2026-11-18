@@ -42,7 +42,7 @@ Kernel、CUDA 和 Triton 不再作为独立主线，而是贯穿其中的“框�
 | Phase 7 | Rollout Runtime | 异步 rollout、多轮/工具调用、轨迹元数据、backpressure | ⬜ |
 | Phase 8 | Alignment → Agentic RL | CS336 Alignment、Diy-LLM RLVR、Agentic RL 实验 | ⬜ |
 
-详细任务、门槛和验收标准见 [AI_Labs/AI_Labs.md](AI_Labs/AI_Labs.md)。项目交付清单见 [CS336_projects/README.md](CS336_projects/README.md)。
+详细任务、门槛和验收标准见 [Mini-LM 执行计划](Mini-LM/Mini-LM.md)。项目交付清单保留在本地 `CS336_projects/README.md`（该目录不上传 GitHub）。
 
 ## cpp-llm-engine 如何加入（2026-11-13 更新）
 
@@ -136,15 +136,24 @@ Verifier / Reward / Replay or Training Data
 .
 ├── AGENTS.md                   # 全仓库教学与协作总规约
 ├── README.md                   # 总路线与当前入口
-├── AI_Labs/
-│   ├── AI_Labs.md             # 详细执行计划与阶段验收
+├── Mini-LM/
+│   ├── Mini-LM.md             # 详细执行计划与阶段验收
 │   ├── P0/                    # PyTorch bridge
 │   └── P1/                    # Transformer foundations
 ├── cs224n-spring2024/          # CS224N 课程资料
 ├── CS224N_projects/            # CS224N 学习产物
 ├── cs336-2026/                 # CS336 课程资料与正式作业
-└── CS336_projects/             # 主线项目与求职级交付物
+└── CS336_projects/             # 本地项目资料与交付规划（不上传）
 ```
+
+四个本地课程目录 `cs224n-spring2024/`、`CS224N_projects/`、`cs336-2026/`、`CS336_projects/` 已加入忽略规则；本地保留，GitHub 不包含这些目录。文档中对它们的引用仅表示本地资料或计划位置，不提供失效的仓库链接。后续需要公开的项目应放在忽略目录之外。
+
+### 当前学习文件
+
+- [Phase 0 笔记](Mini-LM/P0/before_P0.md)与[练习](Mini-LM/P0/P0.py)。
+- [Phase 1 笔记](Mini-LM/P1/before_P1.md)。
+- [组件练习](Mini-LM/P1/01_components/)、[Block 与 RoPE](Mini-LM/P1/02_block/)。
+- [拼装指南](Mini-LM/P1/03_assembly/assembly_lab.md)、[当前实现](Mini-LM/P1/03_assembly/assembly_lab.py)、[拼装前复习模板](Mini-LM/P1/03_assembly/before_assembly_lab.py)。
 
 ## 通用交付标准
 

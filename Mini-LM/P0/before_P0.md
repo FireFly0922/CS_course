@@ -295,7 +295,7 @@ torch.optim.AdamW(
 )
 ```
 
-这里只展示接口，AdamW的原理在`CS224N_projects\Assignment2\task.md`的`2.(a)`中有过详细解释
+这里只展示接口，AdamW的原理在本地资料 `CS224N_projects/Assignment2/task.md`（不上传 GitHub）的`2.(a)`中有过详细解释
 
 ## 模型训推组成
 
@@ -314,7 +314,7 @@ torch.optim.AdamW(
 
 #### Dropout
 
-关于Dropout的定义以及细节在`CS224N_projects\Assignment2\task.md`的`2(b)`，在使用时
+关于Dropout的定义以及细节在本地资料 `CS224N_projects/Assignment2/task.md`（不上传 GitHub）的`2(b)`，在使用时
 
 ```python
 import torch
