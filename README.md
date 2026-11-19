@@ -1,198 +1,48 @@
-# math2metal
+# LLM 与推理框架学习路线
 
-> 从 PyTorch 与 Transformer 基础，走向 LLM 推理框架、rollout runtime 和 Agentic RL。
+四个阶段依次推进，近期不并行安排 CS106L 或 LeetCode。具体练习、环境和验收细则放在各阶段对应目录。
 
-## 核心目标
+## 1. MiniLM：手写并训练语言模型
 
-这不是一条以手写 kernel 为终点的路线。仓库围绕以下能力组织：
+参考 Diy-LLM、CS336、MiniMind 和 nanoGPT，从数学、tensor shape 和数据流出发，亲手实现 Transformer 核心结构，提升 PyTorch 编码与调试能力。
 
-1. 快速掌握大模型架构、训练原理和最小训练闭环；
-2. 熟悉 PyTorch，持续提高 Python / PyTorch 工程能力；
-3. 重点掌握 LLM 推理框架的请求、调度、缓存、服务和观测；
-4. 完成可用于推理加速 / AI Infra 实习申请的系统项目；
-5. 将推理引擎能力延伸到 RL rollout、工具调用和多轮 Agent 训练；
-6. 在具备 rollout 基础设施视角后学习 CS336 Alignment、RLVR 和 Agentic RL。
+完成数据处理、Tokenizer、训练循环、从随机初始化开始的预训练和 SFT；根据模型能力与任务需要，选择 DPO、PPO/RLHF 或 GRPO/RLVR 等后训练实验。最终得到能进行基本中文对话、遵循简单指令，并在有限任务上表现出可测能力的小语言模型。根据训练需要学习混合精度、DDP、FSDP 和 DeepSpeed。
 
-## 学习主线
+已有 PyTorch 基础保留，当前从 Multi-Head Attention、RoPE 和 tensor layout 继续。阶段规划见 [MiniLM 学习规划](Mini-LM/Mini-LM.md)。
 
-```text
-PyTorch 基础
-→ Diy-LLM + CS336：Transformer 与最小训练闭环（并行少量 C++ 工程桥接）
-→ 推理基础 + cpp-llm-engine：CPU 模型执行与 KV Cache
-→ cpp-llm-engine：缓存、调度与服务；zero-to-sglang：框架设计对照
-→ mini-sglang：阅读并实验真实轻量推理框架
-→ 面向 Agentic RL 的 rollout runtime
-→ CS336 Alignment + Diy-LLM RLVR
-→ Agentic RL
-```
+## 2. cpp-llm-engine：C++ 推理引擎
 
-Kernel、CUDA 和 Triton 不再作为独立主线，而是贯穿其中的“框架性能素养”：理解 tensor layout、显存/带宽/算术强度、attention backend、benchmark/profile、数值验证，以及 CUDA Graph、融合和量化对框架的约束。
+先按推理引擎需求补充现代 C++ 基础与 C++17 特性，包括引用与指针、对象生命周期、RAII、智能指针、移动语义、容器和必要的构建调试知识；此时不展开完整 CS106L 课程。
 
-## 阶段路线
+按照 Datawhale 教程推进模型加载、Tensor 与算子、Decoder、生成与 KV Cache、调度和服务。复用此前 llama.cpp 学习成果作为基线与对照，按教程的 CPU 六任务要求完成学习和验收。
 
-| 阶段 | 学习 / 项目 | 核心产物 | 状态 |
-|---|---|---|---|
-| Phase 0 | PyTorch Training Bridge | 训练/评估循环、autograd、shape/stride、基础测试 | ✅ 基本完成 |
-| Phase 1 | Transformer Foundations | MHA、RoPE、tensor layout、Tiny Transformer；少量 C++ 桥接 | 🔓 进行中 |
-| Phase 2 | TinyLM Training Loop | 最小训练/恢复/生成；C0 后并行 C++ 加载与 Tensor 底座 | ⬜ |
-| Phase 3 | Inference Foundations | Naive/KV Cache、Prefill/Decode、C++ 模型执行、指标与 C1 | ⬜ |
-| Phase 4 | C++ Inference Runtime + Mini SGL 对照 | 请求生命周期、HTTP、continuous batching、scheduler、Paged/Prefix Cache | ⬜ |
-| Phase 5 | Read Mini-SGLang | 真实框架源码地图、chunked prefill、overlap、CUDA Graph、TP、backend | ⬜ |
-| Phase 6 | Inference Runtime Portfolio | 服务、调度、缓存、观测、SLO 与可复现性能报告 | ⬜ |
-| Phase 7 | Rollout Runtime | 异步 rollout、多轮/工具调用、轨迹元数据、backpressure | ⬜ |
-| Phase 8 | Alignment → Agentic RL | CS336 Alignment、Diy-LLM RLVR、Agentic RL 实验 | ⬜ |
+## 3. zero-to-sglang：推理框架实践
 
-详细任务、门槛和验收标准见 [Mini-LM 执行计划](Mini-LM/Mini-LM.md)。项目交付清单保留在本地 `CS336_projects/README.md`（该目录不上传 GitHub）。
+按照 Datawhale 教程完成推理基础、Mini SGL 实践和真实 SGLang 源码学习，理解请求生命周期、缓存、调度、并行与性能分析。
 
-## cpp-llm-engine 如何加入（2026-11-13 更新）
+保留教程要求的动手环节，并与 cpp-llm-engine、此前的 llama.cpp 学习进行对照。具体章节任务与验收在本阶段目录维护，开源贡献作为选做内容。
 
-以 `cpp-llm-engine` 为 C++/端侧推理基础的工程载体，以 `llm-algo-leetcode` 为按需选读的原理和实验库。保留 Phase 0–8 编号与后续 rollout / Agentic RL 目标，不同时完整重写 C++ 引擎和 Python Mini SGL。
+## 4. CS106L：系统掌握现代 C++
 
-| 进入范围 | 前置条件 | 当前判断 |
-|---|---|---|
-| C++ Foundation 准备 | 基本编程能力；按需补 C++ 语法、引用、容器、类与资源生命周期 | 可以开始准备；C++ 熟练度尚未验收 |
-| Chapter00–03：基线、加载、Tensor、算子 | C0 工程门槛：Linux/WSL2、C++17、CMake 3.20+、CTest；能独立完成所有权/shape/错误路径练习 | 待验收；不要求先完成全部模型课程 |
-| Chapter04–06：Decoder 与生成 | C0 + Gate 1：MHA、RoPE、layout、Norm/FFN、token→logits；本计划默认在 Phase 2 后系统推进 | 尚未达到，先完成当前 Phase 1 |
-| Chapter07–10：缓存、调度与服务 | Gate 2、Gate 3 + C1：最小训练闭环、正确生成、KV 一致性、容量与指标 | 后续阶段 |
+在前两个推理项目的实践基础上，系统学习 CS106L，整理类型、泛型、资源管理、值语义及标准库知识，提高现代 C++ 的理解与熟练度。
 
-上述门槛是个人学习安排，不是组队活动官方报名条件。当前没有确认 C++/WSL2/编译环境已就绪；报名或跑通参考实现都不代表门槛通过。详细检查表见执行计划第 3.1 节。
+完成所选学期的课程练习与作业，并回顾推理项目中的设计。LeetCode 与实习面试准备放到这一阶段再启动，近期不并行安排。
 
-项目统一在计划路径 `CS336_projects/cpp-inference-runtime/` 积累，按 bridge → execution → serving 递进；`mini-sgl-labs/` 保留源码对照与差异实验。目录按实际任务创建，计划路径不代表已有实现。
+## 学习方式与范围
 
-当前建议约 2/3 时间完成 Phase 1、1/3 做 C++ 桥接；以验收而非活动日期升级。端侧方向优先练习内存、量化、加载、CPU/backend 和单请求性能，设备专用部署在选定真实目标硬件后开展。
+- 采用“中文直觉与英文术语 → 数学与数据流 → API 小例子 → 独立实现 → 测试与 review”的方式学习。
+- Agent 负责指导、练习设计、错误分析和代码审阅；学习代码由学习者编写，Agent 不代写实现或直接修复代码。
+- 每阶段保留代码、测试或基线对照、中文记录；详细验收由对应目录维护。
+- 本地以 CPU、小规模正确性实验为主，GPU 训练和框架性能实验按需使用服务器。
+- CS336 正式作业独立完成，遵守各作业目录的学术诚信规约。
+- Kernel 优化按实际问题选学；Agentic RL 保留为远期扩展，暂不安排。
 
-## 当前进度与下一节
+## 主要资料参考
 
-- Phase 0 已基本完成，不从头重复。
-- Phase 1 已学习 Embedding、位置编码概览和单头 Scaled Dot-Product Attention。
-- 下一节：**Multi-Head Attention → RoPE → tensor layout**。
-- 随后的 Phase 1 任务：RMSNorm、SwiGLU、残差、causal LM 数据流和可过拟合小数据的 Tiny Transformer。
-
-每一节默认采用：
-
-```text
-中文理论概念
-→ 数学 / shape / 数据流
-→ PyTorch API 解释
-→ 可运行 toy example
-→ 独立练习
-→ 测试与后续 review
-```
-
-每个重要 PyTorch API 都必须紧跟一个小型使用示例；本地先用 CPU 和小 shape 建立正确性，服务器再做 CUDA、多 GPU 和性能实验。
-
-## 推理框架能力清单
-
-主线项目需要逐步覆盖：
-
-- 请求生命周期、streaming、取消、超时和 backpressure；
-- Scheduler、continuous batching、admission control；
-- Prefill / Decode、KV Cache 生命周期与容量核算；
-- Paged KV Cache、Prefix / Radix Cache；
-- Chunked Prefill、overlap scheduling；
-- CUDA Graph 的框架使用与 shape / 内存约束；
-- attention backend 接口、选择和回退；
-- tensor parallel 与多进程请求流；
-- OpenAI-compatible API 与可观测性；
-- latency、throughput、TTFT、TPOT/ITL、goodput、尾延迟与 SLO。
-
-## 性能素养：必学但不喧宾夺主
-
-必须会：
-
-- 从 kernel 输入输出和 tensor layout 理解框架调用边界；
-- 区分 compute-bound 与 memory-bound，估算显存、带宽和算术强度；
-- 解释不同 attention backend 的适用条件；
-- 正确执行 warmup、同步、重复测量、benchmark 和 profile；
-- 验证优化前后数值一致，并保留回归测试；
-- 说明 CUDA Graph、融合算子和量化算子对调度与缓存的约束。
-
-不再强制：
-
-- 从零实现高性能 Triton FlashAttention；
-- 深入 PTX、warp 或长期手调 block size；
-- 完成 CS336 Assignment 2 的全部 kernel TODO；
-- 用单个算子速度作为最终项目的核心成果。
-
-## Rollout runtime 为什么位于 RL 之前
-
-Agentic RL 不只是算法问题。训练系统必须反复调用推理引擎生成轨迹，并处理多轮状态、工具调用、超时、失败、模型版本和 reward 元数据。Phase 7 将把 Phase 4–6 的推理能力改造成训练基础设施：
-
-```text
-Trainer / Policy Update
-        ↓ model version
-Rollout Orchestrator
-        ↓ batched async requests
-Inference Runtime ↔ Tool / Environment
-        ↓ trajectories + token/logprob/reward metadata
-Verifier / Reward / Replay or Training Data
-```
-
-进入 Agentic RL 前，至少应能解释一次请求如何被调度、如何占用/释放 KV Cache、如何度量长尾延迟，以及多轮/工具调用为何会改变 batching 和缓存策略。
-
-## 仓库结构
-
-```text
-.
-├── AGENTS.md                   # 全仓库教学与协作总规约
-├── README.md                   # 总路线与当前入口
-├── Mini-LM/
-│   ├── Mini-LM.md             # 详细执行计划与阶段验收
-│   ├── P0/                    # PyTorch bridge
-│   └── P1/                    # Transformer foundations
-├── cs224n-spring2024/          # CS224N 课程资料
-├── CS224N_projects/            # CS224N 学习产物
-├── cs336-2026/                 # CS336 课程资料与正式作业
-└── CS336_projects/             # 本地项目资料与交付规划（不上传）
-```
-
-四个本地课程目录 `cs224n-spring2024/`、`CS224N_projects/`、`cs336-2026/`、`CS336_projects/` 已加入忽略规则；本地保留，GitHub 不包含这些目录。文档中对它们的引用仅表示本地资料或计划位置，不提供失效的仓库链接。后续需要公开的项目应放在忽略目录之外。
-
-### 当前学习文件
-
-- [Phase 0 笔记](Mini-LM/P0/before_P0.md)与[练习](Mini-LM/P0/P0.py)。
-- [Phase 1 笔记](Mini-LM/P1/before_P1.md)。
-- [组件练习](Mini-LM/P1/01_components/)、[Block 与 RoPE](Mini-LM/P1/02_block/)。
-- [拼装指南](Mini-LM/P1/03_assembly/assembly_lab.md)、[当前实现](Mini-LM/P1/03_assembly/assembly_lab.py)、[拼装前复习模板](Mini-LM/P1/03_assembly/before_assembly_lab.py)。
-
-## 通用交付标准
-
-阶段项目按需要包含：
-
-```text
-<project>/
-├── src/                        # 模块化代码
-├── tests/                      # 正确性、边界与回归测试
-├── benchmarks/                 # 可复现性能测试
-├── configs/                    # 实验配置
-├── results/                    # 原始数据与汇总
-├── docs/                       # 架构、请求流或实验记录
-└── README.md                   # 设计、运行、结果、局限
-```
-
-验收统一检查：
-
-- 可在记录的环境和命令下复现；
-- 核心 tensor shape、请求状态和资源生命周期清晰；
-- 有自动测试、参考实现或 baseline 对照；
-- 性能实验记录硬件、版本、模型、dtype、输入/输出长度、并发、warmup 和重复次数；
-- 区分 cold start 与 steady state、平均值与 percentile；
-- 结论由测试、profiler、trace 或原始数据支持；
-- README 能说明设计取舍、失败实验和已知局限。
-
-## 学术诚信
-
-CS336 正式作业的核心实现、数学题和 writeup 由学习者独立完成。AI 只在各作业子目录 `AGENTS.md` 允许的范围内进行翻译、概念讲解、文档定位、测试思路、错误解释和 code review。子目录规约比本文件更严格时，以子目录规约为准。
-
-## 主要资料
-
-- [Stanford CS336 Spring 2026](https://cs336.stanford.edu/)
-- [Datawhale Diy-LLM](https://datawhalechina.github.io/diy-llm/)
-- [zero-to-sglang](https://github.com/datawhalechina/zero-to-sglang)
-- [mini-sglang](https://github.com/sgl-project/mini-sglang)
-- [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
-- [cpp-llm-engine 使用说明](https://github.com/datawhalechina/cpp-llm-engine/blob/main/USAGE.md)
-- [cpp-llm-engine CPU 学习计划](https://github.com/datawhalechina/cpp-llm-engine/blob/main/source/guides/cpu_learning_plan.md)
-- [llm-algo-leetcode](https://github.com/datawhalechina/llm-algo-leetcode)
-
-cpp-llm-engine 与 llm-algo-leetcode 资料核对：2026-11-13（文档及部分源码抽查，未运行完整测试）。其他课程沿用 2026-10-31 的核对记录；开始对应阶段前重新检查章节状态。
+- [Diy-LLM](https://datawhalechina.github.io/diy-llm/)
+- [CS336](https://cs336.stanford.edu/)
+- [MiniMind](https://github.com/jingyaogong/minimind)
+- [nanoGPT](https://github.com/karpathy/nanoGPT)
+- [cpp-llm-engine CPU 六任务计划](https://github.com/datawhalechina/cpp-llm-engine/blob/main/source/guides/cpu_learning_plan.md)
+- [zero-to-sglang](https://github.com/datawhalechina/zero-to-sglang/blob/main/README_zh.md)
+- [CS106L](https://web.stanford.edu/class/cs106l/)
